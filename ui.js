@@ -3,6 +3,36 @@
    下标随时会错位 —— 点「删第 3 条」可能删掉别的。 */
 
 /* ===== 每日 ===== */
+var CURTAB='days';               // 当前在哪个页签 —— 决定改完之后刷新哪个列表
+
+/* 一条支出的编辑行(每日页用):项目名 / 金额 / 付款人 / 分摊
+   付款人可以先不选 —— 帮别人代记时很常见。没选之前这笔不进分账,界面上会明说。 */
+function expenseRowHTML(e){
+  var q="'"+e.id+"'";
+  var Ms=MEMBERS(), T=travelers(), Tids=travelerIds();
+  var sh=(Array.isArray(e.share)?e.share:Tids).filter(function(x){ return Tids.indexOf(x)>=0; });
+  var claimed=isLiveMember(e.payer);
+  return '<div class="dayex'+(claimed?'':' unclaimed')+'">'+
+    '<div class="exhead">'+
+      '<input class="t" value="'+esc(e.t)+'" placeholder="花在哪(如 晚饭/门票/加油)" onchange="EX('+q+',\'t\',this.value)">'+
+      '<span class="del" onclick="delExpense('+q+')">✕</span>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div class="fl"><label>金额 ¥(总额)</label>'+
+        '<input type="number" inputmode="decimal" value="'+esc(e.amt)+'" oninput="EXamt('+q+',this.value)"></div>'+
+      '<div class="fl"><label>谁付的钱</label><select onchange="EX('+q+',\'payer\',this.value)">'+
+        '<option value="">— 选付款人 —</option>'+
+        Ms.map(function(m){ return '<option value="'+esc(m.id)+'" '+(e.payer===m.id?'selected':'')+'>'+esc(m.name)+'</option>'; }).join('')+
+      '</select></div>'+
+    '</div>'+
+    (claimed?'':'<div class="warnline">⚠️ 还没选付款人,这笔暂不计入分账</div>')+
+    '<div class="shline">分摊给谁(点一下切换,'+sh.length+'人均摊 ¥'+money(num(e.amt)/(sh.length||1))+'/人)</div>'+
+    '<div class="chips">'+T.map(function(m){
+      return '<span class="chip '+(sh.indexOf(m.id)>=0?'on':'')+'" onclick="toggleShare('+q+',\''+m.id+'\')">'+esc(m.name)+'</span>';
+    }).join('')+'</div>'+
+  '</div>';
+}
+
 function renderDays(){
   var box=el('v_days'); box.innerHTML='';
   DAYS().forEach(function(d){
@@ -31,7 +61,12 @@ function renderDays(){
       '<div class="g2">'+
         '<div class="fl"><label>退订最晚日期 ⏰</label><input value="'+esc(d.cancel)+'" oninput="U('+q+',\'cancel\',this.value)" placeholder="如 9.26 12:00前"></div>'+
         '<div class="fl"><label>预订人 / 付款</label><input value="'+esc(d.payer)+'" oninput="U('+q+',\'payer\',this.value)" placeholder="谁订的/平台/金额"></div>'+
-      '</div>';
+      '</div>'+
+      '<div class="dayexhd"><span>🧾 当天开销</span>'+
+        '<span class="daytot" id="daytot_'+d.id+'">当天合计 ¥'+money(dayTotal(d.id))+'</span></div>'+
+      dayExpenses(d.id).map(expenseRowHTML).join('')+
+      '<button class="addbtn" style="margin:0;" onclick="addDayExpense('+q+')">＋ 记一笔当天开销</button>'+
+      '<div class="dayexnote">房费不在这里改(用「预订」页的刷新房费)。合计含房费,记完自动进分账。</div>';
     box.appendChild(c);
   });
 }
@@ -41,6 +76,7 @@ function U(id,k,v){
   markDirty();
   renderCost(); renderBook();
   if(k==='booked'||k==='route') renderDays();
+  if(k==='price') refreshDayTotals();     // 房价改了,当天合计跟着变
 }
 
 /* ===== 费用 ===== */
@@ -107,31 +143,53 @@ function renderBook(){
 
 /* ===== 分账:条目增删改 ===== */
 function addExpense(){
-  var mine = meId() || (MEMBERS()[0]||{}).id || '';
+  // 付款人默认【不填】—— 以前用 meId()||第一个成员 兜底,
+  // 结果没选「我是谁」的人一记账就全挂到巴巴头上,而且没人看得出来
   data.expenses.push(stamp({
     id:'e_'+DEV+'_'+now().toString(36)+Math.random().toString(36).slice(2,5), seq:now(),
-    t:'', amt:'', payer:mine, share:travelerIds(), dayId:'', manual:true
+    t:'', amt:'', payer:'', share:travelerIds(), dayId:'', manual:true
   }));
   markDirty(); renderSplit();
+}
+/* 每日页:给某一天记一笔 */
+function addDayExpense(dayId){
+  data.expenses.push(stamp({
+    id:'e_'+DEV+'_'+now().toString(36)+Math.random().toString(36).slice(2,5), seq:now(),
+    t:'', amt:'', payer:'', share:travelerIds(), dayId:dayId||'', manual:true
+  }));
+  markDirty(); renderDays(); renderSplitBal();
 }
 function delExpense(id){
   var e=E(id); if(!e) return;
   e.del=true; stamp(e);           // 墓碑,不是真删
-  markDirty(); renderSplit();
+  markDirty(); reRenderLists();
 }
-function EX(id,k,v){ var e=E(id); if(!e) return; e[k]=v; stamp(e); markDirty(); renderSplit(); }
+function EX(id,k,v){ var e=E(id); if(!e) return; e[k]=v; stamp(e); markDirty(); reRenderLists(); }
 function EXamt(id,v){
   var e=E(id); if(!e) return;
   e.amt=v;
   if(e.src==='room') e.manual=true;   // 手改过金额 → 「刷新房费」不再覆盖
-  stamp(e); markDirty(); renderSplitBal();
+  stamp(e); markDirty();
+  // 金额是 oninput,整页重渲染会把正在打字的输入框冲掉 —— 只原地更新合计
+  if(CURTAB==='days') refreshDayTotals(); else renderSplitBal();
 }
 function toggleShare(eid,mid){
   var e=E(eid); if(!e) return;
   if(!Array.isArray(e.share)) e.share=travelerIds();
   var k=e.share.indexOf(mid);
   if(k>=0) e.share.splice(k,1); else e.share.push(mid);
-  stamp(e); markDirty(); renderSplit();
+  stamp(e); markDirty(); reRenderLists();
+}
+/* 同一条支出在「每日」和「分账」两个页面都能改,只重渲染当前这个页面;
+   另一个页面切过去时 tab() 会重新渲染,不会看到旧数据 */
+function reRenderLists(){
+  if(CURTAB==='days') renderDays(); else renderSplit();
+}
+function refreshDayTotals(){
+  DAYS().forEach(function(d){
+    var t=el('daytot_'+d.id);
+    if(t) t.textContent='当天合计 ¥'+money(dayTotal(d.id));
+  });
 }
 
 /* ===== 分账:一键刷新 ===== */
@@ -161,7 +219,7 @@ function importRooms(){
         id:'e_room_'+d.id, seq:(+d.seq||0)+0.5,   // 挂在对应那天后面
         t: d.hotel || (d.area+'住宿'),
         amt: d.booked ? r2(p*T.length) : 0,
-        payer: (MEMBERS()[0]||{}).id||'', share: travelerIds(),
+        payer: '', share: travelerIds(),     // 付款人留空等人认领,不硬塞第一个成员
         dayId: d.id, src:'room', unit:p
       }));
       added++;
@@ -195,7 +253,7 @@ function importCar(){
     var amt   = tag==='rent' ? r2(r.carRent) : r2(r.oil);
     if(e){ e.del=false; e.t=title; if(!e.manual) e.amt=amt; stamp(e); }
     else data.expenses.push(stamp({
-      id:fixedId, seq:(tag==='rent'?900001:900002), t:title, amt:amt, payer:(MEMBERS()[0]||{}).id||'',
+      id:fixedId, seq:(tag==='rent'?900001:900002), t:title, amt:amt, payer:'',
       share:travelerIds(), dayId:'', badge:'车', src:'car', tag:tag
     }));
   });
@@ -210,6 +268,8 @@ function renderSplitBal(){
   var T=travelers();
   var avg=total/(T.length||1);
   var nOnly=MEMBERS().filter(function(m){ return m.noTrip; }).length;
+  var pend=pendingExpenses();
+  var pendAmt=pend.reduce(function(s,e){ return s+num(e.amt); },0);
   box.innerHTML=
     '<div class="sum" style="background:linear-gradient(135deg,#7a4d1e,#c9832a);">'+
       '<h3>💸 分账总览</h3>'+
@@ -217,6 +277,7 @@ function renderSplitBal(){
       '<div class="divider"></div>'+
       '<div class="miniline"><span>'+T.length+' 位参与者人均(仅参考)</span><span>¥'+money(avg)+'</span></div>'+
       '<div class="miniline"><span>条目数 · 成员</span><span>'+EXPENSES().length+' 笔 · '+MEMBERS().length+'人('+nOnly+'人只代付)</span></div>'+
+      (pend.length?'<div class="miniline" style="font-weight:800;"><span>⚠️ '+pend.length+' 笔还没选付款人</span><span>¥'+money(pendAmt)+' 未计入</span></div>':'')+
     '</div>'+
     '<div class="card">'+
       '<div class="cardtop"><span class="droute">📊 每人账目</span></div>'+
@@ -274,7 +335,8 @@ function renderSplit(){
     var sh=(Array.isArray(e.share)?e.share:Tids).filter(function(x){ return Tids.indexOf(x)>=0; });
     var uh=e.unit?(' · 单人 ¥'+money(num(e.unit))+' × '+sh.length+'人'):'';
     var badge=exBadge(e);
-    h+='<div class="exrow'+(e.manual&&e.src?' locked':'')+'">'+
+    var claimed=isLiveMember(e.payer);
+    h+='<div class="exrow'+(e.manual&&e.src?' locked':'')+(claimed?'':' unclaimed')+'">'+
       '<div class="exhead">'+
         (badge?'<span class="bd">'+esc(badge)+'</span>':'')+
         '<input class="t" value="'+esc(e.t)+'" placeholder="项目名(如 D3晚饭/加油/门票)" onchange="EX('+q+',\'t\',this.value)" style="border:none;padding:2px 0;font-weight:700;">'+
@@ -283,9 +345,17 @@ function renderSplit(){
       '<div class="g2">'+
         '<div class="fl"><label>金额 ¥(总额)'+(e.manual&&e.src?' 🔒手填':'')+'</label><input type="number" inputmode="decimal" value="'+esc(e.amt)+'" oninput="EXamt('+q+',this.value)"></div>'+
         '<div class="fl"><label>谁付的钱</label><select onchange="EX('+q+',\'payer\',this.value)">'+
+          '<option value="">— 选付款人 —</option>'+
           Ms.map(function(m){ return '<option value="'+esc(m.id)+'" '+(e.payer===m.id?'selected':'')+'>'+esc(m.name)+'</option>'; }).join('')+
         '</select></div>'+
       '</div>'+
+      (claimed?'':'<div class="warnline">⚠️ 还没选付款人,这笔暂不计入分账</div>')+
+      // 房费/车费的归属由「刷新」按钮维护,给改反而会和它打架;手记的才让挂
+      (e.src ? '' :
+        '<div class="fl" style="margin-bottom:7px;"><label>挂到哪天</label><select onchange="EX('+q+',\'dayId\',this.value)">'+
+          '<option value="">— 不挂 —</option>'+
+          DAYS().map(function(d){ return '<option value="'+esc(d.id)+'" '+(e.dayId===d.id?'selected':'')+'>'+esc(d.b)+' '+esc(d.route)+'</option>'; }).join('')+
+        '</select></div>')+
       '<div class="shline">分摊给谁(点一下切换,'+sh.length+'人均摊 ¥'+money(num(e.amt)/(sh.length||1))+'/人'+uh+')</div>'+
       '<div class="chips">'+T.map(function(m){
         return '<span class="chip '+(sh.indexOf(m.id)>=0?'on':'')+'" onclick="toggleShare('+q+',\''+m.id+'\')">'+esc(m.name)+'</span>';
@@ -303,10 +373,12 @@ function renderSplit(){
 
 /* ===== tab ===== */
 function tab(t){
+  CURTAB=t;
   ['days','cost','book','split'].forEach(function(x){
     el('v_'+x).classList.toggle('hide',x!==t);
     document.querySelector('.tab[data-t='+x+']').classList.toggle('on',x===t);
   });
+  if(t==='days') renderDays();     // 分账页改过的条目,切回来要看到最新的
   if(t==='cost') renderCost();
   if(t==='book') renderBook();
   if(t==='split') renderSplit();

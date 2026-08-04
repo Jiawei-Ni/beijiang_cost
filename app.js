@@ -130,8 +130,9 @@ function M(id){ return byId(data.members,id); }
 function mName(id){ var m=M(id); return m?m.name:'(已删)'; }
 function D(id){ return byId(data.days,id); }
 function E(id){ return byId(data.expenses,id); }
-/* 支出的日期徽章:优先关联的那天,其次自带标签 */
-function exBadge(e){ var d=D(e.dayId); return d ? d.b : (e.badge||''); }
+/* 支出的日期徽章:优先关联的那天,其次自带标签。
+   那天被删掉之后不再顶着旧徽章 —— 条目留着(钱还在账上),只是不再属于任何一天 */
+function exBadge(e){ var d=D(e.dayId); return (d && !d.del) ? d.b : (e.badge||''); }
 
 /* 盖时间戳 —— 所有改动都必须走这里,否则合并时会被别人的旧数据盖掉 */
 function stamp(o){ o.mt = now(); o.by = DEV; return o; }
@@ -164,6 +165,20 @@ window.addEventListener('beforeunload',saveNow);
 function travelers(){ return MEMBERS().filter(function(m){ return !m.noTrip; }); }
 function travelerIds(){ return travelers().map(function(m){ return m.id; }); }
 function isPayerOnly(id){ var m=M(id); return !!(m&&m.noTrip); }
+/* 付款人是不是一个还在的成员 —— 空的(代记还没认领)和已删的都算不是 */
+function isLiveMember(id){ var m=M(id); return !!(m && !m.del); }
+/* 记了金额但还没认领付款人的条目:不进账目,但要在界面上显眼地提醒,不能悄悄吞掉 */
+function pendingExpenses(){
+  return EXPENSES().filter(function(e){ return num(e.amt)>0 && !isLiveMember(e.payer); });
+}
+/* 某一天花了多少(含房费,含还没认领的) */
+function dayTotal(dayId){
+  return EXPENSES().reduce(function(s,e){ return e.dayId===dayId ? s+num(e.amt) : s; },0);
+}
+/* 每日页里手记的当天开销:房费/车费由「刷新」按钮维护,不在这儿编辑 */
+function dayExpenses(dayId){
+  return EXPENSES().filter(function(e){ return e.dayId===dayId && e.src!=='room' && e.src!=='car'; });
+}
 
 /* ===== 结算代表 =====
    settleTo 只影响最后的转账建议,不改个人垫付/应摊,也不改支出的真实付款人。
@@ -281,7 +296,10 @@ function balances(){
   Ms.forEach(function(m){ paid[m.id]=0; owe[m.id]=0; });
   EXPENSES().forEach(function(e){
     var amt=num(e.amt); if(!amt) return;
-    if(paid[e.payer]===undefined) paid[e.payer]=0;
+    // 付款人还没选(代记的)或者已被删掉 —— 整条跳过。
+    // 只跳垫付那一半的话,分摊照记,这笔钱就凭空消失了:净额求和不再是 0,
+    // 结算时那点差额会被摊到别人头上,而且是悄悄的。
+    if(!isLiveMember(e.payer)) return;
     paid[e.payer]+=amt;
     var sh=(e.share||[]).filter(function(x){ return T.indexOf(x)>=0; });
     if(!sh.length) sh=T;

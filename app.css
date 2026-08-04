@@ -105,6 +105,17 @@ table.bal td:first-child{text-align:left;font-weight:700;}
 .bindhint{font-size:10.5px;color:#8a8f99;white-space:normal;}
 .settlebind-badge{font-size:9.5px;line-height:1.25;color:#2a5c9d;font-weight:700;margin-top:2px;white-space:normal;}
 .addbtn{width:100%;font-family:inherit;font-size:13.5px;font-weight:700;border:1.5px dashed #b9c0c9;background:#fff;color:#5a6470;border-radius:10px;padding:11px;cursor:pointer;margin-bottom:11px;-webkit-appearance:none;appearance:none;}
+
+/* 每日页:当天开销 */
+.dayexhd{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:12.5px;font-weight:800;color:#6b7480;margin:12px 0 7px;padding-top:11px;border-top:1px solid #eef0f3;}
+.daytot{font-size:12px;font-weight:800;color:#2a9d63;white-space:nowrap;}
+.dayex{background:#fafbfc;border:1px solid #eef0f3;border-radius:10px;padding:9px 10px;margin-bottom:8px;}
+.dayex .exhead{margin-bottom:6px;}
+.dayex .t{flex:1;min-width:0;width:0;border:none;padding:2px 0;font-weight:700;font-size:14.5px;background:transparent;}
+.dayex.unclaimed,.exrow.unclaimed{border-left:3px solid #d98324;}
+.warnline{font-size:11px;font-weight:700;color:#c9702a;background:#fff6ec;border-radius:7px;padding:5px 8px;margin:2px 0 6px;line-height:1.4;}
+.dayexnote{font-size:10.5px;color:#aab;line-height:1.45;padding-top:2px;}
 .sechd{font-size:12.5px;font-weight:800;color:#6b7480;padding:6px 4px 7px;}
 .note{font-size:11.5px;color:#aab;text-align:center;padding:4px 12px;}
 
