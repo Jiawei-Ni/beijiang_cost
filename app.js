@@ -165,6 +165,65 @@ function travelers(){ return MEMBERS().filter(function(m){ return !m.noTrip; });
 function travelerIds(){ return travelers().map(function(m){ return m.id; }); }
 function isPayerOnly(id){ var m=M(id); return !!(m&&m.noTrip); }
 
+/* ===== 结算代表 =====
+   settleTo 只影响最后的转账建议,不改个人垫付/应摊,也不改支出的真实付款人。
+   链式绑定取链末;并发同步万一合出环,按 (seq,id) 最小者裁决,每台设备结果一致。 */
+function memberOrder(a,b){
+  var d=(+a.seq||0)-(+b.seq||0);
+  if(d) return d;
+  return a.id<b.id ? -1 : (a.id>b.id ? 1 : 0);
+}
+function settlementRoots(){
+  var Ms=MEMBERS().slice().sort(memberOrder), alive={}, roots={};
+  Ms.forEach(function(m){ alive[m.id]=m; });
+
+  function resolve(start){
+    if(roots[start]) return roots[start];
+    var path=[], pos={}, cur=start, root=start;
+    while(alive[cur]){
+      if(roots[cur]){ root=roots[cur]; break; }
+      if(pos[cur]!=null){
+        var cycle=path.slice(pos[cur]).map(function(id){return alive[id];}).sort(memberOrder);
+        root=cycle[0].id;
+        cycle.forEach(function(m){ roots[m.id]=root; });
+        break;
+      }
+      pos[cur]=path.length; path.push(cur);
+      var to=alive[cur].settleTo;
+      if(!to || to===cur || !alive[to]){ root=cur; break; }
+      cur=to;
+    }
+    path.forEach(function(id){ roots[id]=root; });
+    return root;
+  }
+  Ms.forEach(function(m){ resolve(m.id); });
+  return roots;
+}
+function settlementRepId(id){ return settlementRoots()[id] || id; }
+function settlementRepName(id){ return mName(settlementRepId(id)); }
+function setSettlementRep(id,target){
+  var m=M(id); if(!m || m.del) return;
+  target=target||'';
+  if(!target || target===id){
+    if(!m.settleTo) return;
+    delete m.settleTo;
+  }else{
+    var t=M(target); if(!t || t.del) return;
+    // 本机不允许直接造环;同步并发造出的环由 settlementRoots() 确定性兜底
+    var seen={}, cur=target;
+    while(cur && !seen[cur]){
+      if(cur===id){ toast('不能循环绑定结算人'); renderSplit(); return; }
+      seen[cur]=1;
+      var x=M(cur);
+      if(!x || x.del || !x.settleTo) break;
+      cur=x.settleTo;
+    }
+    if(m.settleTo===target) return;
+    m.settleTo=target;
+  }
+  stamp(m); markDirty(); renderSplit();
+}
+
 function togglePayerOnly(id){
   var m=M(id); if(!m) return;
   m.noTrip = !m.noTrip;
@@ -193,6 +252,10 @@ function delMember(id){
   if(MEMBERS().length<=1) return;
   var m=M(id); if(!m) return;
   m.del=true; stamp(m);
+  // 代表删掉后,直接绑定到他的人恢复本人结算;链上更远的人仍可落到最后有效成员
+  data.members.forEach(function(x){
+    if(!x.del && x.settleTo===id){ delete x.settleTo; stamp(x); }
+  });
   data.expenses.forEach(function(e){
     if(e.del || !Array.isArray(e.share)) return;
     var k=e.share.indexOf(id);
@@ -231,14 +294,32 @@ function balances(){
     return { id:m.id, name:m.name, paid:(paid[m.id]||0), owe:(owe[m.id]||0), net:(paid[m.id]||0)-(owe[m.id]||0) };
   });
 }
+function settlementGroups(){
+  var Ms=MEMBERS().slice().sort(memberOrder), roots=settlementRoots(), byMember={};
+  balances().forEach(function(x){ byMember[x.id]=x; });
+  var groups={};
+  Ms.forEach(function(m){
+    var rid=roots[m.id]||m.id;
+    if(!groups[rid]) groups[rid]={id:rid,name:mName(rid),members:[],net:0,order:M(rid)||m};
+    groups[rid].members.push(m);
+    groups[rid].net+=(byMember[m.id]||{net:0}).net;
+  });
+  return Object.keys(groups).map(function(id){
+    var g=groups[id];
+    g.members.sort(memberOrder);
+    var included=g.members.filter(function(m){return m.id!==g.id;}).map(function(m){return m.name;});
+    g.label=g.name+(included.length?'（含'+included.join('、')+'）':'');
+    return g;
+  }).sort(function(a,b){ return memberOrder(a.order,b.order); });
+}
 function settlements(){
-  var b=balances();
-  var debt=b.filter(function(x){return x.net<-0.005;}).map(function(x){return {name:x.name,v:-x.net};}).sort(function(a,c){return c.v-a.v;});
-  var cred=b.filter(function(x){return x.net> 0.005;}).map(function(x){return {name:x.name,v: x.net};}).sort(function(a,c){return c.v-a.v;});
+  var b=settlementGroups();
+  var debt=b.filter(function(x){return x.net<-0.005;}).map(function(x){return {id:x.id,name:x.label,v:-x.net,order:x.order};}).sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
+  var cred=b.filter(function(x){return x.net> 0.005;}).map(function(x){return {id:x.id,name:x.label,v: x.net,order:x.order};}).sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
   var out=[], i=0, j=0, guard=0;
   while(i<debt.length && j<cred.length && guard++<200){
     var v=Math.min(debt[i].v,cred[j].v);
-    if(v>0.005) out.push({from:debt[i].name,to:cred[j].name,amt:r2(v)});
+    if(v>0.005) out.push({from:debt[i].name,to:cred[j].name,fromId:debt[i].id,toId:cred[j].id,amt:r2(v)});
     debt[i].v=r2(debt[i].v-v); cred[j].v=r2(cred[j].v-v);
     if(debt[i].v<=0.005) i++;
     if(cred[j].v<=0.005) j++;

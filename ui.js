@@ -205,7 +205,7 @@ function importCar(){
 /* ===== 分账:渲染 ===== */
 function renderSplitBal(){
   var box=el('sp_bal'); if(!box) return;
-  var B=balances(), S=settlements();
+  var B=balances(), S=settlements(), roots=settlementRoots();
   var total=EXPENSES().reduce(function(s,e){ return s+num(e.amt); },0);
   var T=travelers();
   var avg=total/(T.length||1);
@@ -224,7 +224,9 @@ function renderSplitBal(){
         '<tr><th>成员</th><th>已垫付</th><th>应分摊</th><th>净额</th></tr>'+
         B.map(function(x){
           var n = Math.abs(x.net)<0.005 ? 0 : x.net;   // 浮点残渣不显示成 −¥0.00
-          return '<tr><td>'+esc(x.name)+(isPayerOnly(x.id)?' <span style="font-size:10px;color:#c9832a;font-weight:700;">代付</span>':'')+'</td>'+
+          var rid=roots[x.id]||x.id;
+          var bind=rid!==x.id ? '<div class="settlebind-badge">结算并入 '+esc(mName(rid))+'</div>' : '';
+          return '<tr><td><div>'+esc(x.name)+(isPayerOnly(x.id)?' <span style="font-size:10px;color:#c9832a;font-weight:700;">代付</span>':'')+'</div>'+bind+'</td>'+
                  '<td>¥'+money(x.paid)+'</td><td>¥'+money(x.owe)+'</td>'+
                  '<td class="'+(n>=0?'pos':'neg')+'">'+(n>=0?'+':'−')+'¥'+money(Math.abs(n))+'</td></tr>';
         }).join('')+
@@ -234,24 +236,32 @@ function renderSplitBal(){
     '<div class="card">'+
       '<div class="cardtop"><span class="droute">🤝 最简结算方案</span></div>'+
       (S.length
-        ? S.map(function(s){ return '<div class="settle"><span>'+esc(s.from)+' → '+esc(s.to)+'</span><span class="amt">¥'+money(s.amt)+'</span></div>'; }).join('')
+        ? S.map(function(s){ return '<div class="settle"><span class="settlewho">'+esc(s.from)+' → '+esc(s.to)+'</span><span class="amt">¥'+money(s.amt)+'</span></div>'; }).join('')
         : '<div style="color:#1e8a4d;font-weight:700;font-size:13.5px;">🎉 已经平账,谁也不欠谁</div>')+
       (S.length?'<div style="font-size:11px;color:#aab;padding-top:5px;">共 '+S.length+' 笔转账即可全部结清</div>':'')+
     '</div>';
 }
 
 function renderSplit(){
-  var Ms=MEMBERS(), T=travelers(), Tids=travelerIds();
+  var Ms=MEMBERS(), T=travelers(), Tids=travelerIds(), roots=settlementRoots();
   var h='<div class="card">'+
     '<div class="cardtop"><span class="droute">👥 同行成员</span><span style="font-size:11px;color:#8a8f99;">实际参与 '+T.length+' 人</span></div>'+
     Ms.map(function(m){
       var q="'"+m.id+"'";
-      return '<div class="mrow"><input value="'+esc(m.name)+'" onchange="setMember('+q+',this.value)">'+
-        '<span class="chip '+(m.noTrip?'':'on')+'" style="white-space:nowrap;" onclick="togglePayerOnly('+q+')">'+(m.noTrip?'💳只代付':'🧳参与')+'</span>'+
-        '<span class="del" onclick="delMember('+q+')">✕</span></div>';
+      var direct=(m.settleTo&&M(m.settleTo)&&!M(m.settleTo).del)?m.settleTo:'';
+      var rid=roots[m.id]||m.id;
+      var hint=direct&&rid!==direct ? '<span class="bindhint">最终归到 '+esc(mName(rid))+'</span>' : '';
+      return '<div class="memberbox">'+
+        '<div class="mrow"><input value="'+esc(m.name)+'" onchange="setMember('+q+',this.value)">'+
+          '<span class="chip '+(m.noTrip?'':'on')+'" style="white-space:nowrap;" onclick="togglePayerOnly('+q+')">'+(m.noTrip?'💳只代付':'🧳参与')+'</span>'+
+          '<span class="del" onclick="delMember('+q+')">✕</span></div>'+
+        '<div class="bindrow"><label>统一结算给</label><select onchange="setSettlementRep('+q+',this.value)">'+
+          '<option value="">本人结算</option>'+
+          Ms.filter(function(x){return x.id!==m.id;}).map(function(x){ return '<option value="'+esc(x.id)+'" '+(direct===x.id?'selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+
+        '</select>'+hint+'</div></div>';
     }).join('')+
     '<button class="addbtn" style="margin:4px 0 0;" onclick="addMember()">＋ 加成员</button>'+
-    '<div style="font-size:11px;color:#aab;padding-top:6px;">点「参与/只代付」切换。<b>只代付</b>的人不占人头、不分摊任何费用,只记录他垫付了多少、最后该收回多少。<br>改名字不会影响账目 —— 账目记的是人不是名字。</div>'+
+    '<div style="font-size:11px;color:#aab;padding-top:6px;">点「参与/只代付」切换。<b>只代付</b>的人不占人头、不分摊任何费用,只记录他垫付了多少、最后该收回多少。<br><b>统一结算</b>只把最终转账并到代表名下,不改变每人账目和真实付款人。改名字不会影响账目。</div>'+
   '</div>'+
   '<div class="sechd">🧾 支出明细(谁付的 / 谁分摊)</div>'+
   '<div style="display:flex;gap:7px;margin-bottom:9px;">'+
