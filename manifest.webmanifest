@@ -1,0 +1,17 @@
+{
+  "name": "北疆行程 · 费用管理",
+  "short_name": "北疆行程",
+  "description": "9 天北疆自驾行程、住宿预订与分账工具,离线可用",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef0f3",
+  "theme_color": "#2a9d63",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
