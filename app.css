@@ -106,6 +106,13 @@ table.bal td:first-child{text-align:left;font-weight:700;}
 .settlebind-badge{font-size:9.5px;line-height:1.25;color:#2a5c9d;font-weight:700;margin-top:2px;white-space:normal;}
 .addbtn{width:100%;font-family:inherit;font-size:13.5px;font-weight:700;border:1.5px dashed #b9c0c9;background:#fff;color:#5a6470;border-radius:10px;padding:11px;cursor:pointer;margin-bottom:11px;-webkit-appearance:none;appearance:none;}
 
+/* 可折叠区块(分账页的同行成员) */
+.foldhd{cursor:pointer;user-select:none;-webkit-user-select:none;margin-bottom:0;}
+.foldhd .droute{flex:0 1 auto;}
+.foldinfo{flex:1;font-size:11px;color:#8a8f99;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.foldarrow{flex:0 0 auto;font-size:13px;color:#8a8f99;font-weight:800;padding-left:2px;}
+.foldpeek{font-size:11.5px;color:#8a8f99;padding-top:7px;line-height:1.5;overflow-wrap:anywhere;}
+
 /* 每日页:当天开销 */
 .dayexhd{display:flex;align-items:center;justify-content:space-between;gap:8px;
   font-size:12.5px;font-weight:800;color:#6b7480;margin:12px 0 7px;padding-top:11px;border-top:1px solid #eef0f3;}

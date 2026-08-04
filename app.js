@@ -179,6 +179,22 @@ function dayTotal(dayId){
 function dayExpenses(dayId){
   return EXPENSES().filter(function(e){ return e.dayId===dayId && e.src!=='room' && e.src!=='car'; });
 }
+/* 支出明细按日期排序 —— 只用于显示。
+   ⚠️ 绝不能拿它去改写 data.expenses 的顺序:合并是按 (seq,id) 排的,
+   数组顺序一变,两台设备内容一样也比不出相等,会无限互相提交 commit。 */
+function expensesByDay(){
+  var order={};
+  DAYS().forEach(function(d,i){ order[d.id]=i; });
+  return EXPENSES().slice().sort(function(a,b){
+    // 没挂日期的(车费、还没归类的)排最后
+    var oa=(a.dayId!=null && order[a.dayId]!=null) ? order[a.dayId] : 1e9;
+    var ob=(b.dayId!=null && order[b.dayId]!=null) ? order[b.dayId] : 1e9;
+    if(oa!==ob) return oa-ob;
+    var d=(+a.seq||0)-(+b.seq||0);
+    if(d) return d;
+    return a.id<b.id ? -1 : (a.id>b.id ? 1 : 0);
+  });
+}
 
 /* ===== 结算代表 =====
    settleTo 只影响最后的转账建议,不改个人垫付/应摊,也不改支出的真实付款人。
@@ -285,10 +301,18 @@ function calc(){
   var carRent = num(data.car.days)*num(data.car.perday);
   var oil     = num(data.car.km)*num(data.car.oil);
   var carTotal= carRent+oil;
+  // 其他开销 = 记在账上的支出里,除掉房费和车费的部分。
+  // 不排掉的话就和上面的「房费单人价合计」「车费合计」重复算了一遍。
+  var other = EXPENSES().reduce(function(s,e){
+    return (e.src==='room'||e.src==='car') ? s : s+num(e.amt);
+  },0);
+  // 人数填 0 或空的时候兜底,否则会算出 ¥Infinity
+  var p4 = num(data.people4||4)||4, p6 = num(data.people6||6)||6;
   return {
     roomTotal: roomTotal, carRent: carRent, oil: oil, carTotal: carTotal,
-    per4: roomTotal + carTotal/num(data.people4||4),
-    per6: roomTotal + carTotal/num(data.people6||6)
+    other: other, p4: p4, p6: p6,
+    per4: roomTotal + carTotal/p4 + other/p4,
+    per6: roomTotal + carTotal/p6 + other/p6
   };
 }
 function balances(){
