@@ -29,6 +29,13 @@ input,select,textarea{width:100%;font-family:inherit;font-size:16px;border:1.5px
 select{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%238a8f99' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 9px center;background-size:11px;padding-right:26px;}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#2a9d63;}
+/* 复选框:上面那条 input{appearance:none} 把原生对勾一起抹掉了 ——
+   结果勾没勾上完全看不出来(默认是开着的,却一直显示成没开)。这里自己画一个。 */
+input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;padding:0;border-radius:6px;
+  border:1.5px solid #c3c8d0;background:#fff;position:relative;cursor:pointer;}
+input[type=checkbox]:checked{background:#2a9d63;border-color:#2a9d63;}
+input[type=checkbox]:checked::after{content:"";position:absolute;left:6px;top:2px;
+  width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg);}
 textarea{resize:vertical;min-height:44px;}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .g3{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px;}

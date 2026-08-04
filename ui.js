@@ -440,7 +440,7 @@ function openSettings(){
     '<div class="fl"><label>访问令牌 Token'+(c.token?' <span style="color:#1e8a4d;">· 已填</span>':'')+'</label>'+
       '<input id="s_token" type="password" value="'+esc(c.token)+'" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="github_pat_..."></div>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#333;font-weight:600;padding:2px 0 8px;">'+
-      '<input type="checkbox" id="s_auto" '+(c.auto?'checked':'')+' style="width:18px;height:18px;flex:0 0 auto;">打开 App 时如果有网,自动拉一次</label>'+
+      '<input type="checkbox" id="s_auto" '+(c.auto?'checked':'')+'>打开 App 时如果有网,自动拉一次</label>'+
     '<div class="modalbtns" style="margin-top:2px;">'+
       '<button class="act b-green" onclick="saveSettings()">保存</button>'+
       '<button class="act b-gray" onclick="ghTest()">测试连接</button>'+
