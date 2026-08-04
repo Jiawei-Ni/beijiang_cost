@@ -19,9 +19,10 @@
 */
 var DEFAULT = {
   ver: 4,
+  start: "2026-09-26",          // D1 那天。后面的日期按天顺延,日出日落也照这个算
   people4: 4,
   people6: 6,
-  mt: { people4: 0, people6: 0, car: 0 },
+  mt: { people4: 0, people6: 0, car: 0, start: 0 },
   car: { days: 8, perday: 930, km: 2420, oil: 0.8 },
 
   members: [

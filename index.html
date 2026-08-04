@@ -35,8 +35,7 @@
 
 <div class="toolbar">
   <button class="act b-green" id="btnsync" onclick="syncNow()">☁ 同步</button>
-  <button class="act b-gray" onclick="exportJSON()">📤 导出</button>
-  <button class="act b-gray" onclick="document.getElementById('imp').click()">📥 导入</button>
+  <!-- 导入导出挪进 ⚙ 了:配了同步之后基本用不上,但功能留着(没网/换手机时还是它最可靠) -->
   <input type="file" id="imp" accept="application/json,.json" style="display:none" onchange="importJSON(event)">
   <button class="act b-gray b-icon" onclick="openSettings()" aria-label="设置">⚙</button>
   <span class="savestate" id="savestate">已自动保存</span>

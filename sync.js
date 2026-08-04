@@ -114,6 +114,10 @@ function mergeData(local, remote){
     if(rm>lm){ out[k]=remote[k]; out.mt[k]=rm; if(remote[k]!==local[k]) stats.updated++; }
     else     { out[k]=local[k];  out.mt[k]=lm; }
   });
+  // 出发日期:漏掉这段的话,mergeData 只挑自己认识的字段,start 每同步一次就被抹掉一次
+  var ls=+lmt.start||0, rs=+rmt.start||0;
+  if(rs>ls && remote.start){ out.start=remote.start; out.mt.start=rs; if(remote.start!==local.start) stats.updated++; }
+  else { out.start=local.start; out.mt.start=ls; }
   var lc=+lmt.car||0, rc=+rmt.car||0;
   if(rc>lc){ out.car=remote.car; if(!same(local.car,remote.car)) stats.updated++; }
   else out.car=local.car;

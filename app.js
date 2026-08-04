@@ -46,7 +46,9 @@ function hashId(pre, s){
 function migrate(d){
   if(!d || typeof d!=='object') return null;
   if(+d.ver >= 4){                       // 已是新版,只补齐可能缺的字段
-    d.mt = d.mt || {people4:0,people6:0,car:0};
+    d.mt = d.mt || {people4:0,people6:0,car:0,start:0};
+    if(d.mt.start==null) d.mt.start=0;
+    if(!d.start) d.start = DEFAULT.start;
     ['members','days','expenses'].forEach(function(k){
       (d[k]||[]).forEach(function(x,i){
         if(x.mt==null) x.mt=0;
@@ -59,9 +61,10 @@ function migrate(d){
   // --- v3 及更早:members 是字符串数组,noTrip 是名字数组,条目没有 id ---
   var out = {
     ver: 4,
+    start: d.start || DEFAULT.start,
     people4: d.people4!=null ? d.people4 : 4,
     people6: d.people6!=null ? d.people6 : 6,
-    mt: {people4:0, people6:0, car:0},
+    mt: {people4:0, people6:0, car:0, start:0},
     car: d.car ? JSON.parse(JSON.stringify(d.car)) : JSON.parse(JSON.stringify(DEFAULT.car)),
     members: [], days: [], expenses: []
   };
@@ -117,7 +120,9 @@ var data = migrate(loadRaw()) || JSON.parse(JSON.stringify(DEFAULT));
   if(!Array.isArray(data.expenses)) data.expenses = [];
   if(!Array.isArray(data.days) || !data.days.length) data.days = JSON.parse(JSON.stringify(DEFAULT.days));
   if(!data.car) data.car = JSON.parse(JSON.stringify(DEFAULT.car));
-  if(!data.mt)  data.mt  = {people4:0,people6:0,car:0};
+  if(!data.mt)  data.mt  = {people4:0,people6:0,car:0,start:0};
+  if(data.mt.start==null) data.mt.start=0;
+  if(!data.start) data.start = DEFAULT.start;
   data.ver = 4;
 })();
 
@@ -295,7 +300,72 @@ function delMember(id){
   markDirty(); renderSplit();
 }
 
-/* ===== 计算 ===== */
+/* ===== 日期 =====
+   D1 是出发那天,后面按天顺延。全程用 UTC 取值,避免设备时区不同算出差一天。 */
+var WEEK=['周日','周一','周二','周三','周四','周五','周六'];
+function tripStart(){ return data.start || DEFAULT.start || '2026-09-26'; }
+function dayIndex(id){ var L=DAYS(); for(var i=0;i<L.length;i++) if(L[i].id===id) return i; return -1; }
+function dayDateObj(i){
+  var p=(tripStart()+'').split('-');
+  var dt=new Date(Date.UTC(+p[0]||2026, (+p[1]||1)-1, +p[2]||1));
+  dt.setUTCDate(dt.getUTCDate()+i);
+  return dt;
+}
+function dayDate(id){                    // "9.26"
+  var i=dayIndex(id); if(i<0) return '';
+  var dt=dayDateObj(i);
+  return (dt.getUTCMonth()+1)+'.'+dt.getUTCDate();
+}
+function dayWeek(id){                    // "周六"
+  var i=dayIndex(id); if(i<0) return '';
+  return WEEK[dayDateObj(i).getUTCDay()];
+}
+
+/* ===== 日出日落(推算) =====
+   坐标按地名匹配,不存进账本 —— 存进去会被同步合并覆盖掉(云端那几天的 mt 比出厂数据新)。
+   时间一律换算成【北京时间 UTC+8】:酒店退订、航班都按北京时间,新疆本地时间差 2 小时容易看错。 */
+var GEO = [
+  ['乌鲁木齐', 43.83, 87.62], ['赛里木湖', 44.60, 81.19], ['克拉玛依', 45.58, 84.89],
+  ['布尔津', 47.70, 86.87], ['喀纳斯', 48.68, 87.03], ['禾木', 48.79, 87.44],
+  ['阿勒泰', 47.85, 88.14], ['贾登峪', 48.55, 87.03]
+];
+function dayGeo(d){
+  if(!d) return null;
+  var i;
+  for(i=0;i<GEO.length;i++) if((d.area||'').indexOf(GEO[i][0])>=0) return {name:GEO[i][0],lat:GEO[i][1],lon:GEO[i][2]};
+  for(i=0;i<GEO.length;i++) if((d.route||'').indexOf(GEO[i][0])>=0) return {name:GEO[i][0],lat:GEO[i][1],lon:GEO[i][2]};
+  return null;                            // 认不出的地方就不显示,别给个瞎算的时间
+}
+function jdToHHMM(jd){
+  var days = jd - 2451545.0 + 0.5 + 8/24;          // → 北京时
+  var mins = Math.round((days - Math.floor(days))*1440) % 1440;
+  return pad(Math.floor(mins/60))+':'+pad(mins%60);
+}
+/* 标准日出方程(NOAA 那套的简化式),误差 1~2 分钟,够用 */
+function sunTimes(lat, lon, y, m, d){
+  var rad=Math.PI/180;
+  var a=Math.floor((14-m)/12), yy=y+4800-a, mm=m+12*a-3;
+  var jdn = d + Math.floor((153*mm+2)/5) + 365*yy + Math.floor(yy/4) - Math.floor(yy/100) + Math.floor(yy/400) - 32045;
+  var n = Math.round(jdn - 2451545.0 + 0.0008);
+  var Js = n - lon/360;                              // 东经为正:越往东,太阳越早过中天
+  var M = (357.5291 + 0.98560028*Js) % 360;
+  var C = 1.9148*Math.sin(M*rad) + 0.02*Math.sin(2*M*rad) + 0.0003*Math.sin(3*M*rad);
+  var lam = (M + C + 180 + 102.9372) % 360;
+  var Jtr = 2451545.0 + Js + 0.0053*Math.sin(M*rad) - 0.0069*Math.sin(2*lam*rad);
+  var sinDec = Math.sin(lam*rad)*Math.sin(23.44*rad);
+  var cosDec = Math.cos(Math.asin(sinDec));
+  var cosW = (Math.sin(-0.833*rad) - Math.sin(lat*rad)*sinDec) / (Math.cos(lat*rad)*cosDec);
+  if(cosW>1 || cosW<-1) return null;                 // 极昼/极夜
+  var w = Math.acos(cosW)/rad;
+  return { rise: jdToHHMM(Jtr - w/360), set: jdToHHMM(Jtr + w/360) };
+}
+function daySun(d){
+  var g=dayGeo(d); if(!g) return null;
+  var i=dayIndex(d.id); if(i<0) return null;
+  var dt=dayDateObj(i);
+  var t=sunTimes(g.lat, g.lon, dt.getUTCFullYear(), dt.getUTCMonth()+1, dt.getUTCDate());
+  return t ? {rise:t.rise, set:t.set, place:g.name} : null;
+}
 function calc(){
   var roomTotal = DAYS().reduce(function(s,d){ return s+num(d.price); },0);
   var carRent = num(data.car.days)*num(data.car.perday);

@@ -44,12 +44,17 @@ function renderDays(){
   var box=el('v_days'); box.innerHTML='';
   DAYS().forEach(function(d){
     var q="'"+d.id+"'";
+    var sun=daySun(d);
     var c=document.createElement('div'); c.className='card';
     c.innerHTML=
       '<div class="cardtop">'+
         '<span class="dbadge '+(d.rest?'rest':'')+'">'+esc(d.b)+'</span>'+
         '<span class="droute">'+esc(d.route)+'</span>'+
         '<span class="pill '+(d.booked?'ok':'no')+'">'+(d.booked?'已订':'未订')+'</span>'+
+      '</div>'+
+      '<div class="dayinfo">'+
+        '<b>'+esc(dayDate(d.id))+'</b> '+esc(dayWeek(d.id))+
+        (sun ? ' · 🌅 '+sun.rise+' · 🌇 '+sun.set+' <span class="dayinfo-x">'+esc(sun.place)+'·推算</span>' : '')+
       '</div>'+
       '<div class="fl"><label>行程 / 路线</label><input value="'+esc(d.route)+'" oninput="U('+q+',\'route\',this.value)"></div>'+
       '<div class="g2">'+
@@ -141,10 +146,10 @@ function renderBook(){
     : '<div class="card" style="background:#eef7f0;"><b style="color:#1e8a4d;">🎉 全部已预订</b></div>';
   L.forEach(function(d){
     h+='<div class="bkrow">'+
-      '<span class="bd">'+esc(d.b)+'</span>'+
+      '<span class="bd two"><b>'+esc(d.b)+'</b><i>'+esc(dayDate(d.id))+'</i></span>'+
       '<div class="binfo">'+
         '<div class="bh">'+esc(d.area)+' · '+esc(d.hotel)+'</div>'+
-        '<div class="bsub">'+esc(d.room)+' · ¥'+esc(d.price)+'/人 '+(d.payer?'· '+esc(d.payer):'')+'</div>'+
+        '<div class="bsub">'+esc(dayWeek(d.id))+' · '+esc(d.room)+' · ¥'+esc(d.price)+'/人 '+(d.payer?'· '+esc(d.payer):'')+'</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
         '<span class="pill '+(d.booked?'ok':'no')+'">'+(d.booked?'已订':'未订')+'</span>'+
@@ -357,10 +362,16 @@ function renderSplit(){
     var sh=(Array.isArray(e.share)?e.share:Tids).filter(function(x){ return Tids.indexOf(x)>=0; });
     var uh=e.unit?(' · 单人 ¥'+money(num(e.unit))+' × '+sh.length+'人'):'';
     var badge=exBadge(e);
+    var bday=D(e.dayId);
+    var badgeHTML = badge
+      ? (bday && !bday.del
+          ? '<span class="bd two"><b>'+esc(badge)+'</b><i>'+esc(dayDate(bday.id))+'</i></span>'
+          : '<span class="bd">'+esc(badge)+'</span>')
+      : '';
     var claimed=isLiveMember(e.payer);
     h+='<div class="exrow'+(e.manual&&e.src?' locked':'')+(claimed?'':' unclaimed')+'">'+
       '<div class="exhead">'+
-        (badge?'<span class="bd">'+esc(badge)+'</span>':'')+
+        badgeHTML+
         '<input class="t" value="'+esc(e.t)+'" placeholder="项目名(如 D3晚饭/加油/门票)" onchange="EX('+q+',\'t\',this.value)" style="border:none;padding:2px 0;font-weight:700;">'+
         '<span class="del" onclick="delExpense('+q+')">✕</span>'+
       '</div>'+
@@ -376,7 +387,7 @@ function renderSplit(){
       (e.src ? '' :
         '<div class="fl" style="margin-bottom:7px;"><label>挂到哪天</label><select onchange="EX('+q+',\'dayId\',this.value)">'+
           '<option value="">— 不挂 —</option>'+
-          DAYS().map(function(d){ return '<option value="'+esc(d.id)+'" '+(e.dayId===d.id?'selected':'')+'>'+esc(d.b)+' '+esc(d.route)+'</option>'; }).join('')+
+          DAYS().map(function(d){ return '<option value="'+esc(d.id)+'" '+(e.dayId===d.id?'selected':'')+'>'+esc(d.b)+' '+esc(dayDate(d.id))+' '+esc(d.route)+'</option>'; }).join('')+
         '</select></div>')+
       '<div class="shline">分摊给谁(点一下切换,'+sh.length+'人均摊 ¥'+money(num(e.amt)/(sh.length||1))+'/人'+uh+')</div>'+
       '<div class="chips">'+T.map(function(m){
@@ -438,12 +449,27 @@ function openSettings(){
       '<button class="act b-gray" onclick="clearToken()">清除令牌</button>'+
       '<button class="act b-gray" style="color:#d94a4a;" onclick="if(confirm(\'恢复到内置的初始行程?\\n\\n本地当前修改会没掉。\\n注意:如果已经开了同步,下次同步会把云端的数据再拉回来。\'))resetData()">↺ 恢复初始数据</button>'+
     '</div>'+
+    '<div class="sechd" style="padding:14px 0 4px;">🗓 行程日期</div>'+
+    '<div class="fl"><label>出发那天(D1)</label>'+
+      '<input id="s_start" type="date" value="'+esc(tripStart())+'"></div>'+
+    '<div class="modaltip">改完点上面的<b>保存</b>。后面每天顺延,日出日落也跟着重算。</div>'+
+    '<div class="sechd" style="padding:14px 0 4px;">💾 备份(一般用不上)</div>'+
+    '<div class="modaltip">配了同步之后,账本已经在 GitHub 上有历史版本了。这两个按钮留着应急:没网时想留一份、或者换手机不想填令牌。</div>'+
+    '<div class="modalbtns" style="margin-top:0;">'+
+      '<button class="act b-gray" onclick="exportJSON()">📤 导出</button>'+
+      '<button class="act b-gray" onclick="document.getElementById(\'imp\').click()">📥 导入</button>'+
+    '</div>'+
     '<div class="note" style="text-align:left;padding:8px 2px 0;">本机设备号 '+esc(DEV)+' · 数据版本 v'+DATA_VERSION+'</div>';
   el('setmodal').classList.remove('hide');
 }
 function closeSettings(){ el('setmodal').classList.add('hide'); }
 function saveSettings(){
   setMeId(el('s_me').value);
+  var st=(el('s_start').value||'').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(st) && st!==data.start){
+    data.start=st; data.mt.start=now();   // 盖时间戳,否则同步时会被别人的旧日期顶掉
+    markDirty();
+  }
   ghSave({
     owner:(el('s_owner').value||'').trim(),
     repo:(el('s_repo').value||'').trim(),
@@ -452,7 +478,7 @@ function saveSettings(){
     token:(el('s_token').value||'').trim(),
     auto:el('s_auto').checked
   });
-  closeSettings(); renderSplit(); toast('设置已保存 ✓');
+  closeSettings(); renderAll(); toast('设置已保存 ✓');   // 日期改了,每日/预订/分账都要重画
 }
 function clearToken(){
   if(!confirm('清除本机保存的令牌?清了就不能同步,要重新填。')) return;
