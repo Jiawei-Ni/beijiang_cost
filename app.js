@@ -313,16 +313,27 @@ function settlementGroups(){
   }).sort(function(a,b){ return memberOrder(a.order,b.order); });
 }
 function settlements(){
-  var b=settlementGroups();
-  var debt=b.filter(function(x){return x.net<-0.005;}).map(function(x){return {id:x.id,name:x.label,v:-x.net,order:x.order};}).sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
-  var cred=b.filter(function(x){return x.net> 0.005;}).map(function(x){return {id:x.id,name:x.label,v: x.net,order:x.order};}).sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
+  var groups=settlementGroups();
+  // 全程用「分」算 —— 浮点上直接贪心会出现「转账总额比债权总额差一两分」
+  var rows=groups.map(function(g){ return {id:g.id, name:g.label, order:g.order, c:Math.round(g.net*100)}; });
+  // 每组各自四舍五入之后,收和付可能不再刚好抵消(差 1~2 分)。
+  // 把这点残差算到金额最大的那组头上:转出总额和转入总额必须严格相等,否则最后总有人差一分钱结不掉。
+  var resid=rows.reduce(function(s,x){ return s+x.c; },0);
+  if(resid!==0 && rows.length){
+    var big=rows.slice().sort(function(a,b){ return Math.abs(b.c)-Math.abs(a.c) || memberOrder(a.order,b.order); })[0];
+    big.c-=resid;
+  }
+  var debt=rows.filter(function(x){return x.c<0;}).map(function(x){return {id:x.id,name:x.name,order:x.order,v:-x.c};})
+               .sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
+  var cred=rows.filter(function(x){return x.c>0;}).map(function(x){return {id:x.id,name:x.name,order:x.order,v: x.c};})
+               .sort(function(a,c){return (c.v-a.v)||memberOrder(a.order,c.order);});
   var out=[], i=0, j=0, guard=0;
-  while(i<debt.length && j<cred.length && guard++<200){
+  while(i<debt.length && j<cred.length && guard++<400){
     var v=Math.min(debt[i].v,cred[j].v);
-    if(v>0.005) out.push({from:debt[i].name,to:cred[j].name,fromId:debt[i].id,toId:cred[j].id,amt:r2(v)});
-    debt[i].v=r2(debt[i].v-v); cred[j].v=r2(cred[j].v-v);
-    if(debt[i].v<=0.005) i++;
-    if(cred[j].v<=0.005) j++;
+    if(v>0) out.push({from:debt[i].name,to:cred[j].name,fromId:debt[i].id,toId:cred[j].id,amt:v/100});
+    debt[i].v-=v; cred[j].v-=v;
+    if(debt[i].v===0) i++;
+    if(cred[j].v===0) j++;
   }
   return out;
 }

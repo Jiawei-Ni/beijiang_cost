@@ -323,7 +323,7 @@ function openSettings(){
         MEMBERS().map(function(m){ return '<option value="'+esc(m.id)+'" '+(me===m.id?'selected':'')+'>'+esc(m.name)+'</option>'; }).join('')+
       '</select></div>'+
     '<div class="sechd" style="padding:12px 0 4px;">☁ 多人同步(GitHub)</div>'+
-    '<div class="modaltip">大家填<b>同一个仓库</b>就能互相同步。令牌只存在你自己手机上,不会上传到仓库里。<br>没填也不影响用 —— 就是个纯本地记账工具。</div>'+
+    '<div class="modaltip">仓库已经<b>预填好</b>了,你只要填最下面的<b>访问令牌</b>,点保存就能和大家同步。<br>令牌只存在你自己手机上,不会上传到仓库里。不填也能用 —— 就是个纯本地记账工具。<br>第一次用请先在上面选<b>我是谁</b>,新记的账会默认算在他头上。</div>'+
     '<div class="g2">'+
       '<div class="fl"><label>GitHub 用户名</label><input id="s_owner" value="'+esc(c.owner)+'" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="如 zhangsan"></div>'+
       '<div class="fl"><label>仓库名</label><input id="s_repo" value="'+esc(c.repo)+'" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="如 beijiang-data"></div>'+

@@ -18,10 +18,23 @@ var LS_TOKEN = 'xj_gh_token';  // 单独存,方便「清除令牌」
 var LS_SYNC  = 'xj_sync_ts';
 var LS_ME    = 'xj_me';        // 我是哪个成员
 
-/* ===== 配置 ===== */
+/* ===== 配置 =====
+   仓库坐标写成默认值 —— 全队用的是同一个账本仓库,同伴拿到网址后只要填一个令牌就能同步。
+   ⚠️ 这里只放「仓库在哪」,令牌绝不写进代码(进了仓库就是公开的,GitHub 还会直接吊销它)。
+   「我是谁」也故意不预设:预设成某个人的话,同伴新记的账会默认记到他头上。 */
+var GH_DEFAULT = { owner:'Jiawei-Ni', repo:'beijiang_data', path:'ledger.json', branch:'main', auto:true };
+
 function ghCfg(){
-  var c = {owner:'', repo:'', path:'ledger.json', branch:'main', auto:true};
-  try{ var s=JSON.parse(lsGet(LS_GH)||'{}'); for(var k in s) if(s[k]!=null) c[k]=s[k]; }catch(e){}
+  var c = {owner:GH_DEFAULT.owner, repo:GH_DEFAULT.repo, path:GH_DEFAULT.path, branch:GH_DEFAULT.branch, auto:GH_DEFAULT.auto};
+  // 存过的值优先;但空字符串当没填过 —— 否则以前存过空配置的人永远拿不到新默认值
+  try{
+    var s=JSON.parse(lsGet(LS_GH)||'{}');
+    for(var k in s){
+      if(s[k]==null) continue;
+      if(typeof s[k]==='string' && !s[k].trim()) continue;
+      c[k]=s[k];
+    }
+  }catch(e){}
   c.token = lsGet(LS_TOKEN) || '';
   return c;
 }
@@ -179,7 +192,7 @@ async function syncNow(silent){
   if(syncing) return;
   var c = ghCfg();
   if(!ghReady()){
-    if(!silent){ toast('先在 ⚙ 里填 GitHub 仓库和令牌'); openSettings(); }
+    if(!silent){ toast('先在 ⚙ 里填一个访问令牌就能同步'); openSettings(); }
     return;
   }
   syncing = true; setSyncState('同步中…', true);
