@@ -91,50 +91,84 @@ function U(id,k,v){
   if(k==='price') refreshDayTotals();     // 房价改了,当天合计跟着变
 }
 
-/* ===== 费用 ===== */
-function setPeople(k,v){ data[k]=v; data.mt[k]=now(); markDirty(); renderCost(); }
-function setCar(k,v){ data.car[k]=v; data.mt.car=now(); markDirty(); renderCost(); }
+/* ===== 费用 =====
+   费用页的数字输入必须【不能】在 oninput 里整页重渲染。
+   iOS 会把被 innerHTML 删除的 input 当成失焦,键盘每输入一位就收起来;
+   type=number 还会吞掉 "1." 这种小数中间态。 */
+function setCostText(id,v){ var n=el(id); if(n) n.textContent=v; }
+function setCostValue(id,v){
+  var n=el(id);
+  // 正在输入的框绝不回写:保留 "1." / ".8" / 空串这些还没完成的编辑态
+  if(n && document.activeElement!==n) n.value=v==null?'':v;
+}
+function refreshCostView(){
+  var box=el('v_cost'); if(!box || !box._costMounted) return;
+  var r=calc();
+  setCostValue('cost_people4',data.people4); setCostValue('cost_people6',data.people6);
+  setCostValue('cost_car_days',data.car.days); setCostValue('cost_car_perday',data.car.perday);
+  setCostValue('cost_car_km',data.car.km); setCostValue('cost_car_oil',data.car.oil);
+
+  setCostText('cost_p4_head','💰 全程人均('+data.people4+'人)');
+  setCostText('cost_p4_total','¥'+money(r.per4));
+  setCostText('cost_p4_room','¥'+money(r.roomTotal));
+  setCostText('cost_p4_car_label','车费 ÷ '+data.people4+'人'); setCostText('cost_p4_car','¥'+money(r.carTotal/r.p4));
+  setCostText('cost_p4_other_label','其他开销 ÷ '+data.people4+'人'); setCostText('cost_p4_other','¥'+money(r.other/r.p4));
+  setCostText('cost_p6_head','💰 全程人均('+data.people6+'人)');
+  setCostText('cost_p6_total','¥'+money(r.per6));
+  setCostText('cost_p6_room','¥'+money(r.roomTotal));
+  setCostText('cost_p6_car_label','车费 ÷ '+data.people6+'人'); setCostText('cost_p6_car','¥'+money(r.carTotal/r.p6));
+  setCostText('cost_p6_other_label','其他开销 ÷ '+data.people6+'人'); setCostText('cost_p6_other','¥'+money(r.other/r.p6));
+  setCostText('cost_rent_label','租车 '+data.car.days+'×'+data.car.perday); setCostText('cost_rent','¥'+money(r.carRent));
+  setCostText('cost_oil_label','油费 '+data.car.km+'×'+data.car.oil); setCostText('cost_oil','¥'+money(r.oil));
+  setCostText('cost_car_total','¥'+money(r.carTotal)); setCostText('cost_other_total','¥'+money(r.other));
+}
+function setPeople(k,v){ data[k]=v; data.mt[k]=now(); markDirty(); refreshCostView(); }
+function setCar(k,v){ data.car[k]=v; data.mt.car=now(); markDirty(); refreshCostView(); }
 
 function renderCost(){
-  var r=calc();
-  el('v_cost').innerHTML=
-    '<div class="peoplebar"><label>👥 分摊人数(方案A)</label><input type="number" inputmode="numeric" value="'+esc(data.people4)+'" oninput="setPeople(\'people4\',this.value)"></div>'+
-    '<div class="sum">'+
-      '<h3>💰 全程人均('+esc(data.people4)+'人)</h3>'+
-      '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val">¥'+money(r.per4)+'</span></div>'+
-      '<div class="divider"></div>'+
-      '<div class="miniline"><span>房费(每日单人价合计)</span><span>¥'+money(r.roomTotal)+'</span></div>'+
-      '<div class="miniline"><span>车费 ÷ '+esc(data.people4)+'人</span><span>¥'+money(r.carTotal/r.p4)+'</span></div>'+
-      '<div class="miniline"><span>其他开销 ÷ '+esc(data.people4)+'人</span><span>¥'+money(r.other/r.p4)+'</span></div>'+
-    '</div>'+
-    '<div class="peoplebar"><label>👥 分摊人数(方案B)</label><input type="number" inputmode="numeric" value="'+esc(data.people6)+'" oninput="setPeople(\'people6\',this.value)"></div>'+
-    '<div class="sum" style="background:linear-gradient(135deg,#2a5c9d,#3577c9);">'+
-      '<h3>💰 全程人均('+esc(data.people6)+'人)</h3>'+
-      '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val">¥'+money(r.per6)+'</span></div>'+
-      '<div class="divider"></div>'+
-      '<div class="miniline"><span>房费(每日单人价合计)</span><span>¥'+money(r.roomTotal)+'</span></div>'+
-      '<div class="miniline"><span>车费 ÷ '+esc(data.people6)+'人</span><span>¥'+money(r.carTotal/r.p6)+'</span></div>'+
-      '<div class="miniline"><span>其他开销 ÷ '+esc(data.people6)+'人</span><span>¥'+money(r.other/r.p6)+'</span></div>'+
-    '</div>'+
-    '<div class="card">'+
-      '<div class="cardtop"><span class="droute">🚙 车费参数(改这里自动重算)</span></div>'+
-      '<div class="g2">'+
-        '<div class="fl"><label>租车天数</label><input type="number" inputmode="decimal" value="'+esc(data.car.days)+'" oninput="setCar(\'days\',this.value)"></div>'+
-        '<div class="fl"><label>每日租金 ¥</label><input type="number" inputmode="decimal" value="'+esc(data.car.perday)+'" oninput="setCar(\'perday\',this.value)"></div>'+
-        '<div class="fl"><label>综合里程 km</label><input type="number" inputmode="decimal" value="'+esc(data.car.km)+'" oninput="setCar(\'km\',this.value)"></div>'+
-        '<div class="fl"><label>每公里油费 ¥</label><input type="number" inputmode="decimal" value="'+esc(data.car.oil)+'" oninput="setCar(\'oil\',this.value)"></div>'+
+  var box=el('v_cost');
+  if(!box._costMounted){
+    box.innerHTML=
+      '<div class="peoplebar"><label>👥 分摊人数(方案A)</label><input id="cost_people4" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setPeople(\'people4\',this.value)"></div>'+
+      '<div class="sum">'+
+        '<h3 id="cost_p4_head"></h3>'+
+        '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val" id="cost_p4_total"></span></div>'+
+        '<div class="divider"></div>'+
+        '<div class="miniline"><span>房费(每日单人价合计)</span><span id="cost_p4_room"></span></div>'+
+        '<div class="miniline"><span id="cost_p4_car_label"></span><span id="cost_p4_car"></span></div>'+
+        '<div class="miniline"><span id="cost_p4_other_label"></span><span id="cost_p4_other"></span></div>'+
       '</div>'+
-      '<div class="divider" style="background:#eee;"></div>'+
-      '<div class="miniline" style="color:#666;"><span>租车 '+esc(data.car.days)+'×'+esc(data.car.perday)+'</span><span>¥'+money(r.carRent)+'</span></div>'+
-      '<div class="miniline" style="color:#666;"><span>油费 '+esc(data.car.km)+'×'+esc(data.car.oil)+'</span><span>¥'+money(r.oil)+'</span></div>'+
-      '<div class="miniline" style="color:#333;font-weight:800;"><span>车费合计</span><span>¥'+money(r.carTotal)+'</span></div>'+
-    '</div>'+
-    '<div class="card">'+
-      '<div class="cardtop"><span class="droute">🧾 其他开销合计</span></div>'+
-      '<div class="miniline" style="color:#333;font-weight:800;"><span>房费车费以外的支出</span><span>¥'+money(r.other)+'</span></div>'+
-      '<div style="font-size:11px;color:#aab;padding-top:6px;">「每日」页记的当天开销、分账页手加的支出都算在这里(不含房费车费,否则重复算)。</div>'+
-    '</div>'+
-    '<div class="note">口径:人均 = 每日单人价合计(房) + 车费÷人数 + 其他开销÷人数。油费已含在车费里。<br>⚠️ 这里的「单人价」就是每人每晚的价,<b>不要再乘人数</b>;分账页的房费总额会自动 = 单人价 × 实际参与人数。<br>这页是<b>预算口径</b>:未预订的房间也按单人价算进去了;分账页则只认已经花掉的钱。</div>';
+      '<div class="peoplebar"><label>👥 分摊人数(方案B)</label><input id="cost_people6" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setPeople(\'people6\',this.value)"></div>'+
+      '<div class="sum" style="background:linear-gradient(135deg,#2a5c9d,#3577c9);">'+
+        '<h3 id="cost_p6_head"></h3>'+
+        '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val" id="cost_p6_total"></span></div>'+
+        '<div class="divider"></div>'+
+        '<div class="miniline"><span>房费(每日单人价合计)</span><span id="cost_p6_room"></span></div>'+
+        '<div class="miniline"><span id="cost_p6_car_label"></span><span id="cost_p6_car"></span></div>'+
+        '<div class="miniline"><span id="cost_p6_other_label"></span><span id="cost_p6_other"></span></div>'+
+      '</div>'+
+      '<div class="card">'+
+        '<div class="cardtop"><span class="droute">🚙 车费参数(改这里自动重算)</span></div>'+
+        '<div class="g2">'+
+          '<div class="fl"><label>租车天数</label><input id="cost_car_days" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setCar(\'days\',this.value)"></div>'+
+          '<div class="fl"><label>每日租金 ¥</label><input id="cost_car_perday" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setCar(\'perday\',this.value)"></div>'+
+          '<div class="fl"><label>综合里程 km</label><input id="cost_car_km" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setCar(\'km\',this.value)"></div>'+
+          '<div class="fl"><label>每公里油费 ¥</label><input id="cost_car_oil" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setCar(\'oil\',this.value)"></div>'+
+        '</div>'+
+        '<div class="divider" style="background:#eee;"></div>'+
+        '<div class="miniline" style="color:#666;"><span id="cost_rent_label"></span><span id="cost_rent"></span></div>'+
+        '<div class="miniline" style="color:#666;"><span id="cost_oil_label"></span><span id="cost_oil"></span></div>'+
+        '<div class="miniline" style="color:#333;font-weight:800;"><span>车费合计</span><span id="cost_car_total"></span></div>'+
+      '</div>'+
+      '<div class="card">'+
+        '<div class="cardtop"><span class="droute">🧾 其他开销合计</span></div>'+
+        '<div class="miniline" style="color:#333;font-weight:800;"><span>房费车费以外的支出</span><span id="cost_other_total"></span></div>'+
+        '<div style="font-size:11px;color:#aab;padding-top:6px;">「每日」页记的当天开销、分账页手加的支出都算在这里(不含房费车费,否则重复算)。</div>'+
+      '</div>'+
+      '<div class="note">口径:人均 = 每日单人价合计(房) + 车费÷人数 + 其他开销÷人数。油费已含在车费里。<br>⚠️ 这里的「单人价」就是每人每晚的价,<b>不要再乘人数</b>;分账页的房费总额会自动 = 单人价 × 实际参与人数。<br>这页是<b>预算口径</b>:未预订的房间也按单人价算进去了;分账页则只认已经花掉的钱。</div>';
+    box._costMounted=true;
+  }
+  refreshCostView();
 }
 
 /* ===== 预订 ===== */
