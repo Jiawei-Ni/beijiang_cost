@@ -126,7 +126,6 @@ function mergeData(local, remote){
   out.members  = mergeList(local.members,  remote.members,  stats);
   out.days     = mergeList(local.days,     remote.days,     stats);
   out.expenses = mergeList(local.expenses, remote.expenses, stats);
-  out.fuel     = mergeList(local.fuel,     remote.fuel,     stats);
   return { data: out, stats: stats };
 }
 

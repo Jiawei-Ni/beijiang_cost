@@ -49,13 +49,15 @@ function migrate(d){
     d.mt = d.mt || {people4:0,people6:0,car:0,start:0};
     if(d.mt.start==null) d.mt.start=0;
     if(!d.start) d.start = DEFAULT.start;
-    if(!Array.isArray(d.fuel)) d.fuel = [];
-    ['members','days','expenses','fuel'].forEach(function(k){
+    if(!d.car) d.car={};
+    if(d.car.startOdo==null) d.car.startOdo='';
+    ['members','days','expenses'].forEach(function(k){
       (d[k]||[]).forEach(function(x,i){
         if(x.mt==null) x.mt=0;
         if(x.seq==null) x.seq=i+1;
       });
     });
+    migrateFuelToExpenses(d);            // 旧 fuel[] → 逐笔支出
     return d;
   }
 
@@ -120,8 +122,9 @@ var data = migrate(loadRaw()) || JSON.parse(JSON.stringify(DEFAULT));
   if(!Array.isArray(data.members) || !data.members.length) data.members = JSON.parse(JSON.stringify(DEFAULT.members));
   if(!Array.isArray(data.expenses)) data.expenses = [];
   if(!Array.isArray(data.days) || !data.days.length) data.days = JSON.parse(JSON.stringify(DEFAULT.days));
-  if(!Array.isArray(data.fuel)) data.fuel = [];
   if(!data.car) data.car = JSON.parse(JSON.stringify(DEFAULT.car));
+  if(data.car.startOdo==null) data.car.startOdo='';
+  migrateFuelToExpenses(data);           // 兜底:本地还存着旧 fuel[] 的也转掉
   if(!data.mt)  data.mt  = {people4:0,people6:0,car:0,start:0};
   if(data.mt.start==null) data.mt.start=0;
   if(!data.start) data.start = DEFAULT.start;
@@ -369,60 +372,74 @@ function daySun(d){
   return t ? {rise:t.rise, set:t.set, place:g.name} : null;
 }
 /* ===== 加油记账 =====
-   实际加油逐笔记:date=日期,odo=里程表读数,cost=本次油费。
-   油费总价 = Σcost,汇总成一条「油费合计」进分账(refreshFuelExpense);
-   平均每公里 = 总价 ÷ (最后读数 − 首次读数),只用于分析,不进分账。 */
-function liveFuel(){ return (data.fuel||[]).filter(function(f){ return !f.del; }); }
+   每笔加油【就是一条支出】(src:'fuel'),自带 日期/里程表/油费/付款人。
+   这样费用页每笔选付款人,分账页同一条直接参与结算,两边改的是同一个对象,不会各说各话。
+   平均每公里 = 总油费 ÷ (最后一次里程表读数 − 取车里程表),只用于分析,不进分账。 */
+function fuelExpenses(){ return EXPENSES().filter(function(e){ return e.src==='fuel'; }); }
 function fuelTotals(){
-  var L=liveFuel(), cost=0, minO=null, maxO=null;
+  var L=fuelExpenses(), cost=0, minO=null, maxO=null;
   L.forEach(function(f){
-    var c=num(f.cost); if(c>0) cost+=c;
+    var c=num(f.amt); if(c>0) cost+=c;
     var o=num(f.odo);
     if(o>0){ if(minO==null||o<minO) minO=o; if(maxO==null||o>maxO) maxO=o; }
   });
-  var km=(minO!=null && maxO!=null) ? maxO-minO : 0;
-  if(L.length<2 || km<=0) km=0;
-  return { count:L.length, cost:cost, km:km, perKm:(cost>0 && km>0) ? cost/km : null };
+  // 有取车里程表:总里程 = 最后读数 − 取车读数(把第一次加油前的里程也算上)
+  var start=num(data.car.startOdo), km=0, ok=false;
+  if(start>0 && maxO!=null){ km=maxO-start; ok=km>0; }
+  else if(minO!=null && maxO!=null && L.length>=2){ km=maxO-minO; ok=km>0; }
+  return { count:L.length, cost:cost, km:ok?km:0, perKm:(cost>0 && ok) ? cost/km : null };
 }
-/* 把加油总价汇总成一条 e_car_oil 支出 —— 这条才参与分账。
-   payer/share 是用户在这条上选的,重算金额时不能动。
-   只在真的有加油记录时才创建,且金额没变时不重新盖时间戳:
-   否则两台新设备各刷新一次都会给这条派生条目盖上自己设备的 by,
-   出厂数据合并不再是零改动,同步会多推 commit。 */
-function refreshFuelExpense(){
-  var t=fuelTotals();
-  var title = t.count ? ('油费合计('+t.count+'笔)') : '油费合计';
-  var amt   = r2(t.cost);
-  var e=E('e_car_oil');
-  if(e){
-    if(e.del){ e.del=false; stamp(e); }   // 删过这条的用户,加油有变化时自动恢复(它是派生汇总)
-    var dirty = e.amt!==amt || e.t!==title;
-    e.t=title; e.amt=amt;
-    if(dirty) stamp(e);
-  }else if(t.count>0){
-    data.expenses.push({ id:'e_car_oil', seq:900002, t:title, amt:amt, payer:'',
-      share:travelerIds(), dayId:'', badge:'车', src:'car', tag:'oil', mt:0 });
+/* 老数据迁移:把独立的 fuel[] 数组转成 src:'fuel' 的支出(它们本来就该是支出)。
+   旧的单条「油费合计」e_car_oil 是汇总派生,改成逐笔后没有意义,打墓碑避免重复算。 */
+function migrateFuelToExpenses(d){
+  if(!d) return;
+  if(!d.car) d.car={};
+  if(d.car.startOdo==null) d.car.startOdo='';
+  if(!Array.isArray(d.expenses)) d.expenses=[];
+  if(Array.isArray(d.fuel)){
+    var live=(d.members||[]).filter(function(m){return m&&!m.del&&!m.noTrip;}).map(function(m){return m.id;});
+    var have={};
+    d.expenses.forEach(function(e){ if(e&&e.id) have[e.id]=1; });
+    d.fuel.forEach(function(f,i){
+      if(!f || !f.id || f.del) return;
+      var nid='e_fuel_'+f.id;
+      if(!have[nid]){
+        d.expenses.push({
+          id:nid, seq:(+f.seq||100000+i+1), t:'加油'+(f.date?(' '+f.date):''),
+          amt:f.cost, payer:f.payer||'',
+          share:(Array.isArray(f.share)&&f.share.length)?f.share.slice():live.slice(),
+          odo:f.odo, date:f.date||'', src:'fuel', badge:'车', manual:true,
+          mt:+f.mt||0
+        });
+        have[nid]=1;
+      }
+    });
+    d.expenses.forEach(function(e){
+      if(e && e.id==='e_car_oil' && !e.del) e.del=true;
+    });
+    delete d.fuel;
   }
-  return t;
 }
 
 function calc(){
   var roomTotal = DAYS().reduce(function(s,d){ return s+num(d.price); },0);
   var carRent = num(data.car.days)*num(data.car.perday);
-  var fuel    = fuelTotals();
-  var oilAll  = fuel.cost;                       // 账本口径:记了多少
-  var carTotal= carRent+oilAll;                  // 车费合计 = 租车 + 全部油费
-  // 人均口径:租车是固定预算,油费只有被认领了才算进去。
-  // 没认领 = 还没定谁买单,先不计 —— 不然人均虚高,而且「取消认领」永远扣不掉。
-  var oilAgg  = E('e_car_oil');
-  var claimedOil = (oilAgg && !oilAgg.del && isLiveMember(oilAgg.payer)) ? oilAll : 0;
-  var claimedCar = carRent + claimedOil;
-  // 其他开销(账本口径)和「参与人均的」分开:未认领的记进账本,但不占人均
+  var oilAll=0, claimedFuel=0;
+  fuelExpenses().forEach(function(f){
+    var c=num(f.amt); if(c<=0) return;
+    oilAll+=c;
+    if(isLiveMember(f.payer)) claimedFuel+=c;   // 每笔单独认领,认领的才进人均
+  });
+  var carTotal = carRent+oilAll;
+  // 人均里只摊已认领的车费(租车是固定预算,油费每笔单独认领后才计入)
+  var claimedCar = carRent + claimedFuel;
+  // 其他开销(账本口径)和「参与人均的」分开:未认领的记进账本,但不占人均。
+  // 必须连 src==='fuel' 一起排除 —— 油费已经在「车费」里算过了,再算一遍就重复。
   var otherAll = EXPENSES().reduce(function(s,e){
-    return (e.src==='room'||e.src==='car') ? s : s+num(e.amt);
+    return (e.src==='room'||e.src==='car'||e.src==='fuel') ? s : s+num(e.amt);
   },0);
   var other = EXPENSES().reduce(function(s,e){
-    if(e.src==='room'||e.src==='car') return s;
+    if(e.src==='room'||e.src==='car'||e.src==='fuel') return s;
     if(!isLiveMember(e.payer)) return s;
     return s+num(e.amt);
   },0);

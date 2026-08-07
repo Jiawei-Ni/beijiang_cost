@@ -156,6 +156,7 @@ function refreshCostView(){
   var r=calc(), ft=fuelTotals();
   setCostValue('cost_people4',data.people4); setCostValue('cost_people6',data.people6);
   setCostValue('cost_car_days',data.car.days); setCostValue('cost_car_perday',data.car.perday);
+  setCostValue('cost_car_startodo', data.car.startOdo);
 
   setCostText('cost_p4_head','💰 全程人均('+data.people4+'人)');
   setCostText('cost_p4_total','¥'+money(r.per4));
@@ -173,41 +174,36 @@ function refreshCostView(){
   setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
   setCostText('cost_car_total','¥'+money(r.carTotal)); setCostText('cost_other_total','¥'+money(r.otherAll));
-  syncFuelPayerUI();
 }
 function p4n(){ return num(data.people4||4)||4; }
 function p6n(){ return num(data.people6||6)||6; }
-function syncFuelPayerUI(){
-  var e=E('e_car_oil');
-  var sel=el('cost_oil_payer'); if(sel) sel.value=(e&&e.payer)||'';
-  var warn=el('cost_oil_warn');
-  if(warn) warn.style.display=(e && e.amt>0 && !isLiveMember(e.payer)) ? 'block':'none';
-}
 function setPeople(k,v){ data[k]=v; data.mt[k]=now(); markDirty(); refreshCostView(); }
 function setCar(k,v){ data.car[k]=v; data.mt.car=now(); markDirty(); refreshCostView(); }
 
-/* ===== 加油记账(费用页) ===== */
+/* ===== 加油记账(费用页) =====
+   每笔加油就是一条 src:'fuel' 的支出,自带 日期/里程表/油费/付款人 ——
+   付款人在这一行直接选,分账页看到的是同一条,两边改的是同一个对象。 */
 function fuelSort(a,b){ return (num(a.odo)-num(b.odo)) || (a.id<b.id?-1:1); }
-function setFuelPayer(v){
-  var e=E('e_car_oil'); if(!e) return;
-  if(e.payer===v) return;
-  e.payer=v; stamp(e); markDirty();
-  refreshCostView(); renderSplitBal();
-}
 function renderFuelRows(){
   var list=el('cost_fuel_list'); if(!list) return;
-  list.innerHTML = liveFuel().sort(fuelSort).map(function(f){
+  var Ms=MEMBERS();
+  list.innerHTML = fuelExpenses().sort(fuelSort).map(function(f){
     var q="'"+f.id+"'";
     return '<div class="fuelrow">'+
       '<input class="fd" placeholder="日期" value="'+esc(f.date||'')+'" onchange="fuelField('+q+',\'date\',this.value)">'+
       '<input class="fo" type="text" inputmode="decimal" placeholder="里程表" value="'+esc(f.odo==null?'':f.odo)+'" onchange="fuelField('+q+',\'odo\',this.value)">'+
-      '<input class="fc" type="text" inputmode="decimal" placeholder="油费¥" value="'+esc(f.cost==null?'':f.cost)+'" onchange="fuelField('+q+',\'cost\',this.value)">'+
+      '<input class="fc" type="text" inputmode="decimal" placeholder="油费¥" value="'+esc(f.amt==null?'':f.amt)+'" onchange="fuelField('+q+',\'cost\',this.value)">'+
+      '<select class="fp" onchange="fuelField('+q+',\'payer\',this.value)">'+
+        '<option value="">— 付款人 —</option>'+
+        Ms.map(function(m){ return '<option value="'+esc(m.id)+'" '+(f.payer===m.id?'selected':'')+'>'+esc(m.name)+'</option>'; }).join('')+
+      '</select>'+
       '<span class="del" onclick="delFuel('+q+')">✕</span></div>';
   }).join('');
 }
 function refreshFuelTotals(){
   var box=el('v_cost'); if(!box || !box._costMounted) return;
   var r=calc(), ft=fuelTotals();
+  setCostValue('cost_car_startodo', data.car.startOdo);
   setCostText('cost_fuel_sum','共 '+ft.count+' 笔 · 总里程 '+(ft.km?ft.km+' km':'—'));
   setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
@@ -217,24 +213,26 @@ function refreshFuelTotals(){
   setCostText('cost_p4_car','¥'+money(r.carPer4)); setCostText('cost_p6_car','¥'+money(r.carPer6));
   setCostText('cost_p4_other','¥'+money(r.other/p4n())); setCostText('cost_p6_other','¥'+money(r.other/p6n()));
   setCostText('cost_other_total','¥'+money(r.otherAll));
-  syncFuelPayerUI();
 }
 function addFuel(){
-  data.fuel.push(stamp({ id:'f_'+DEV+'_'+now().toString(36)+Math.random().toString(36).slice(2,5),
-    seq:now(), date:'', odo:'', cost:'' }));
-  refreshFuelExpense();
+  data.expenses.push(stamp({
+    id:'e_fuel_'+DEV+'_'+now().toString(36)+Math.random().toString(36).slice(2,5),
+    seq:now(), t:'加油', amt:'', payer:'', share:travelerIds(), dayId:'',
+    odo:'', date:'', badge:'车', src:'fuel', manual:true
+  }));
   markDirty(); renderFuelRows(); refreshFuelTotals(); renderSplitBal();
 }
 function delFuel(id){
-  var f=(data.fuel||[]).filter(function(x){return x.id===id;})[0]; if(!f) return;
+  var f=E(id); if(!f) return;
   f.del=true; stamp(f);
-  refreshFuelExpense();
   markDirty(); renderFuelRows(); refreshFuelTotals(); renderSplitBal();
 }
 function fuelField(id,field,v){
-  var f=(data.fuel||[]).filter(function(x){return x.id===id;})[0]; if(!f) return;
-  f[field]=v; stamp(f);
-  refreshFuelExpense();
+  var f=E(id); if(!f) return;
+  if(field==='cost'){ f.amt=v; f.t='加油'+(f.date?(' '+f.date):''); }
+  else if(field==='date'){ f.date=v; f.t='加油'+(v?(' '+v):''); }
+  else f[field]=v;
+  stamp(f);
   markDirty(); refreshFuelTotals(); renderSplitBal();
 }
 
@@ -269,13 +267,12 @@ function renderCost(){
         '<div class="miniline" style="color:#666;"><span id="cost_rent_label"></span><span id="cost_rent"></span></div>'+
         '<div class="divider" style="background:#eee;"></div>'+
         '<div class="cardtop"><span class="droute">⛽ 加油记账</span><span class="foldinfo" id="cost_fuel_sum">共 0 笔</span></div>'+
+        '<div class="fl"><label>取车里程表读数 km(填了才能算第一次加油前的里程)</label>'+
+          '<input id="cost_car_startodo" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" onchange="setCar(\'startOdo\',this.value)"></div>'+
+        '<div class="fuelheads"><span>日期</span><span>里程表</span><span>油费¥</span><span>付款人</span></div>'+
         '<div id="cost_fuel_list"></div>'+
         '<button class="addbtn" style="margin:0;" onclick="addFuel()">＋ 记一笔加油</button>'+
-        '<div class="miniline" style="color:#666;"><span>油费合计(进分账)</span><span id="cost_oil"></span></div>'+
-        '<div class="fuelpayer"><label>油费付款人</label><select id="cost_oil_payer" onchange="setFuelPayer(this.value)">'+
-          '<option value="">— 选付款人 —</option>'+MEMBERS().map(function(m){return '<option value="'+esc(m.id)+'">'+esc(m.name)+'</option>';}).join('')+
-        '</select></div>'+
-        '<div class="warnline" id="cost_oil_warn" style="display:none;">⚠️ 油费还没选付款人,暂不计入人均分账</div>'+
+        '<div class="miniline" style="color:#666;"><span>油费合计(逐笔进分账)</span><span id="cost_oil"></span></div>'+
         '<div class="miniline" style="color:#333;font-weight:800;"><span>车费合计(租车+油费)</span><span id="cost_car_total"></span></div>'+
         '<div class="fuelana">平均每公里 ¥<span id="cost_perkm">—</span> · 仅参考,不进分账</div>'+
       '</div>'+
@@ -425,8 +422,7 @@ function importCar(){
     id:'e_car_rent', seq:900001, t:title, amt:amt, payer:'',
     share:travelerIds(), dayId:'', badge:'车', src:'car', tag:'rent'
   }));
-  // 油费那条由加油记账自动汇总(refreshFuelExpense),这里不碰
-  refreshFuelExpense();
+  // 油费是逐笔支出,在加油记账区维护,这里只刷新租车
   markDirty(); renderSplit(); toast('租车费已刷新,记得改付款人');
 }
 
@@ -714,10 +710,7 @@ function importJSON(ev){
 }
 
 /* ===== 启动 ===== */
-function renderAll(){
-  refreshFuelExpense();          // 保证「油费合计」这条支出存在(加油记账的汇总入口)
-  renderDays(); renderCost(); renderBook(); renderSplit();
-}
+function renderAll(){ renderDays(); renderCost(); renderBook(); renderSplit(); }
 renderAll();
 
 (function boot(){

@@ -157,11 +157,17 @@ table.bal td:first-child{text-align:left;font-weight:700;}
 .ovwarn{font-size:10.5px;color:#c9702a;font-weight:700;white-space:nowrap;}
 
 /* 费用页:加油记账 */
+.fuelheads{display:flex;gap:6px;font-size:10.5px;color:#8a8f99;font-weight:700;margin:8px 0 4px;}
+.fuelheads span{flex:1;min-width:0;}
+.fuelheads span:nth-child(1){flex:0 0 64px;}
+.fuelheads span:nth-child(2){flex:0 0 88px;}
+.fuelheads span:nth-child(3){flex:0 0 84px;}
 .fuelrow{display:flex;align-items:center;gap:6px;margin-bottom:6px;min-width:0;}
 .fuelrow input{flex:1;min-width:0;font-size:14px;padding:7px 8px;}
 .fuelrow .fd{flex:0 0 64px;}
 .fuelrow .fo{flex:0 0 88px;}
 .fuelrow .fc{flex:0 0 84px;}
+.fuelrow select.fp{flex:1;min-width:0;font-size:13.5px;padding:7px 6px;}
 .fuelrow .del{flex:0 0 auto;padding:0 4px;}
 .fuelpayer{display:flex;align-items:center;gap:8px;margin:8px 0 4px;}
 .fuelpayer label{flex:0 0 auto;font-size:11px;color:#8a8f99;font-weight:700;margin:0;}
