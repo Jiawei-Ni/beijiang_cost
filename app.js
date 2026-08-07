@@ -395,6 +395,7 @@ function refreshFuelExpense(){
   var amt   = r2(t.cost);
   var e=E('e_car_oil');
   if(e){
+    if(e.del){ e.del=false; stamp(e); }   // 删过这条的用户,加油有变化时自动恢复(它是派生汇总)
     var dirty = e.amt!==amt || e.t!==title;
     e.t=title; e.amt=amt;
     if(dirty) stamp(e);
@@ -408,20 +409,31 @@ function refreshFuelExpense(){
 function calc(){
   var roomTotal = DAYS().reduce(function(s,d){ return s+num(d.price); },0);
   var carRent = num(data.car.days)*num(data.car.perday);
-  var oil     = fuelTotals().cost;             // 油费来自实际加油记账,不再是估算
-  var carTotal= carRent+oil;
-  // 其他开销 = 记在账上的支出里,除掉房费和车费的部分。
-  // 不排掉的话就和上面的「房费单人价合计」「车费合计」重复算了一遍。
-  var other = EXPENSES().reduce(function(s,e){
+  var fuel    = fuelTotals();
+  var oilAll  = fuel.cost;                       // 账本口径:记了多少
+  var carTotal= carRent+oilAll;                  // 车费合计 = 租车 + 全部油费
+  // 人均口径:租车是固定预算,油费只有被认领了才算进去。
+  // 没认领 = 还没定谁买单,先不计 —— 不然人均虚高,而且「取消认领」永远扣不掉。
+  var oilAgg  = E('e_car_oil');
+  var claimedOil = (oilAgg && !oilAgg.del && isLiveMember(oilAgg.payer)) ? oilAll : 0;
+  var claimedCar = carRent + claimedOil;
+  // 其他开销(账本口径)和「参与人均的」分开:未认领的记进账本,但不占人均
+  var otherAll = EXPENSES().reduce(function(s,e){
     return (e.src==='room'||e.src==='car') ? s : s+num(e.amt);
+  },0);
+  var other = EXPENSES().reduce(function(s,e){
+    if(e.src==='room'||e.src==='car') return s;
+    if(!isLiveMember(e.payer)) return s;
+    return s+num(e.amt);
   },0);
   // 人数填 0 或空的时候兜底,否则会算出 ¥Infinity
   var p4 = num(data.people4||4)||4, p6 = num(data.people6||6)||6;
   return {
-    roomTotal: roomTotal, carRent: carRent, oil: oil, carTotal: carTotal,
-    other: other, p4: p4, p6: p6,
-    per4: roomTotal + carTotal/p4 + other/p4,
-    per6: roomTotal + carTotal/p6 + other/p6
+    roomTotal: roomTotal, carRent: carRent, oil: oilAll, carTotal: carTotal,
+    otherAll: otherAll, other: other, p4: p4, p6: p6,
+    carPer4: claimedCar/p4, carPer6: claimedCar/p6,   // 人均里只摊已认领的车费
+    per4: roomTotal + claimedCar/p4 + other/p4,
+    per6: roomTotal + claimedCar/p6 + other/p6
   };
 }
 function balances(){

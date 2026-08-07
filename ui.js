@@ -160,25 +160,40 @@ function refreshCostView(){
   setCostText('cost_p4_head','💰 全程人均('+data.people4+'人)');
   setCostText('cost_p4_total','¥'+money(r.per4));
   setCostText('cost_p4_room','¥'+money(r.roomTotal));
-  setCostText('cost_p4_car_label','车费 ÷ '+data.people4+'人'); setCostText('cost_p4_car','¥'+money(r.carTotal/r.p4));
-  setCostText('cost_p4_other_label','其他开销 ÷ '+data.people4+'人'); setCostText('cost_p4_other','¥'+money(r.other/r.p4));
+  setCostText('cost_p4_car_label','车费 ÷ '+data.people4+'人'); setCostText('cost_p4_car','¥'+money(r.carPer4));
+  setCostText('cost_p4_other_label','其他开销 ÷ '+data.people4+'人'); setCostText('cost_p4_other','¥'+money(r.other/p4n()));
   setCostText('cost_p6_head','💰 全程人均('+data.people6+'人)');
   setCostText('cost_p6_total','¥'+money(r.per6));
   setCostText('cost_p6_room','¥'+money(r.roomTotal));
-  setCostText('cost_p6_car_label','车费 ÷ '+data.people6+'人'); setCostText('cost_p6_car','¥'+money(r.carTotal/r.p6));
-  setCostText('cost_p6_other_label','其他开销 ÷ '+data.people6+'人'); setCostText('cost_p6_other','¥'+money(r.other/r.p6));
+  setCostText('cost_p6_car_label','车费 ÷ '+data.people6+'人'); setCostText('cost_p6_car','¥'+money(r.carPer6));
+  setCostText('cost_p6_other_label','其他开销 ÷ '+data.people6+'人'); setCostText('cost_p6_other','¥'+money(r.other/p6n()));
   setCostText('cost_rent_label','租车 '+data.car.days+'×'+data.car.perday); setCostText('cost_rent','¥'+money(r.carRent));
   renderFuelRows();
   setCostText('cost_fuel_sum','共 '+ft.count+' 笔 · 总里程 '+(ft.km?ft.km+' km':'—'));
   setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
-  setCostText('cost_car_total','¥'+money(r.carTotal)); setCostText('cost_other_total','¥'+money(r.other));
+  setCostText('cost_car_total','¥'+money(r.carTotal)); setCostText('cost_other_total','¥'+money(r.otherAll));
+  syncFuelPayerUI();
+}
+function p4n(){ return num(data.people4||4)||4; }
+function p6n(){ return num(data.people6||6)||6; }
+function syncFuelPayerUI(){
+  var e=E('e_car_oil');
+  var sel=el('cost_oil_payer'); if(sel) sel.value=(e&&e.payer)||'';
+  var warn=el('cost_oil_warn');
+  if(warn) warn.style.display=(e && e.amt>0 && !isLiveMember(e.payer)) ? 'block':'none';
 }
 function setPeople(k,v){ data[k]=v; data.mt[k]=now(); markDirty(); refreshCostView(); }
 function setCar(k,v){ data.car[k]=v; data.mt.car=now(); markDirty(); refreshCostView(); }
 
 /* ===== 加油记账(费用页) ===== */
 function fuelSort(a,b){ return (num(a.odo)-num(b.odo)) || (a.id<b.id?-1:1); }
+function setFuelPayer(v){
+  var e=E('e_car_oil'); if(!e) return;
+  if(e.payer===v) return;
+  e.payer=v; stamp(e); markDirty();
+  refreshCostView(); renderSplitBal();
+}
 function renderFuelRows(){
   var list=el('cost_fuel_list'); if(!list) return;
   list.innerHTML = liveFuel().sort(fuelSort).map(function(f){
@@ -192,12 +207,17 @@ function renderFuelRows(){
 }
 function refreshFuelTotals(){
   var box=el('v_cost'); if(!box || !box._costMounted) return;
-  var ft=fuelTotals(), r=calc();
+  var r=calc(), ft=fuelTotals();
   setCostText('cost_fuel_sum','共 '+ft.count+' 笔 · 总里程 '+(ft.km?ft.km+' km':'—'));
-  setCostText('cost_oil','¥'+money(ft.cost));
+  setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
   setCostText('cost_car_total','¥'+money(r.carTotal));
-  setCostText('cost_p4_car','¥'+money(r.carTotal/r.p4)); setCostText('cost_p6_car','¥'+money(r.carTotal/r.p6));
+  // 人均总花费和两条车费行也要跟着变 —— 不然记一笔加油,人均那行大字纹丝不动
+  setCostText('cost_p4_total','¥'+money(r.per4)); setCostText('cost_p6_total','¥'+money(r.per6));
+  setCostText('cost_p4_car','¥'+money(r.carPer4)); setCostText('cost_p6_car','¥'+money(r.carPer6));
+  setCostText('cost_p4_other','¥'+money(r.other/p4n())); setCostText('cost_p6_other','¥'+money(r.other/p6n()));
+  setCostText('cost_other_total','¥'+money(r.otherAll));
+  syncFuelPayerUI();
 }
 function addFuel(){
   data.fuel.push(stamp({ id:'f_'+DEV+'_'+now().toString(36)+Math.random().toString(36).slice(2,5),
@@ -252,6 +272,10 @@ function renderCost(){
         '<div id="cost_fuel_list"></div>'+
         '<button class="addbtn" style="margin:0;" onclick="addFuel()">＋ 记一笔加油</button>'+
         '<div class="miniline" style="color:#666;"><span>油费合计(进分账)</span><span id="cost_oil"></span></div>'+
+        '<div class="fuelpayer"><label>油费付款人</label><select id="cost_oil_payer" onchange="setFuelPayer(this.value)">'+
+          '<option value="">— 选付款人 —</option>'+MEMBERS().map(function(m){return '<option value="'+esc(m.id)+'">'+esc(m.name)+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="warnline" id="cost_oil_warn" style="display:none;">⚠️ 油费还没选付款人,暂不计入人均分账</div>'+
         '<div class="miniline" style="color:#333;font-weight:800;"><span>车费合计(租车+油费)</span><span id="cost_car_total"></span></div>'+
         '<div class="fuelana">平均每公里 ¥<span id="cost_perkm">—</span> · 仅参考,不进分账</div>'+
       '</div>'+
