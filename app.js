@@ -49,7 +49,8 @@ function migrate(d){
     d.mt = d.mt || {people4:0,people6:0,car:0,start:0};
     if(d.mt.start==null) d.mt.start=0;
     if(!d.start) d.start = DEFAULT.start;
-    ['members','days','expenses'].forEach(function(k){
+    if(!Array.isArray(d.fuel)) d.fuel = [];
+    ['members','days','expenses','fuel'].forEach(function(k){
       (d[k]||[]).forEach(function(x,i){
         if(x.mt==null) x.mt=0;
         if(x.seq==null) x.seq=i+1;
@@ -119,6 +120,7 @@ var data = migrate(loadRaw()) || JSON.parse(JSON.stringify(DEFAULT));
   if(!Array.isArray(data.members) || !data.members.length) data.members = JSON.parse(JSON.stringify(DEFAULT.members));
   if(!Array.isArray(data.expenses)) data.expenses = [];
   if(!Array.isArray(data.days) || !data.days.length) data.days = JSON.parse(JSON.stringify(DEFAULT.days));
+  if(!Array.isArray(data.fuel)) data.fuel = [];
   if(!data.car) data.car = JSON.parse(JSON.stringify(DEFAULT.car));
   if(!data.mt)  data.mt  = {people4:0,people6:0,car:0,start:0};
   if(data.mt.start==null) data.mt.start=0;
@@ -366,10 +368,47 @@ function daySun(d){
   var t=sunTimes(g.lat, g.lon, dt.getUTCFullYear(), dt.getUTCMonth()+1, dt.getUTCDate());
   return t ? {rise:t.rise, set:t.set, place:g.name} : null;
 }
+/* ===== 加油记账 =====
+   实际加油逐笔记:date=日期,odo=里程表读数,cost=本次油费。
+   油费总价 = Σcost,汇总成一条「油费合计」进分账(refreshFuelExpense);
+   平均每公里 = 总价 ÷ (最后读数 − 首次读数),只用于分析,不进分账。 */
+function liveFuel(){ return (data.fuel||[]).filter(function(f){ return !f.del; }); }
+function fuelTotals(){
+  var L=liveFuel(), cost=0, minO=null, maxO=null;
+  L.forEach(function(f){
+    var c=num(f.cost); if(c>0) cost+=c;
+    var o=num(f.odo);
+    if(o>0){ if(minO==null||o<minO) minO=o; if(maxO==null||o>maxO) maxO=o; }
+  });
+  var km=(minO!=null && maxO!=null) ? maxO-minO : 0;
+  if(L.length<2 || km<=0) km=0;
+  return { count:L.length, cost:cost, km:km, perKm:(cost>0 && km>0) ? cost/km : null };
+}
+/* 把加油总价汇总成一条 e_car_oil 支出 —— 这条才参与分账。
+   payer/share 是用户在这条上选的,重算金额时不能动。
+   只在真的有加油记录时才创建,且金额没变时不重新盖时间戳:
+   否则两台新设备各刷新一次都会给这条派生条目盖上自己设备的 by,
+   出厂数据合并不再是零改动,同步会多推 commit。 */
+function refreshFuelExpense(){
+  var t=fuelTotals();
+  var title = t.count ? ('油费合计('+t.count+'笔)') : '油费合计';
+  var amt   = r2(t.cost);
+  var e=E('e_car_oil');
+  if(e){
+    var dirty = e.amt!==amt || e.t!==title;
+    e.t=title; e.amt=amt;
+    if(dirty) stamp(e);
+  }else if(t.count>0){
+    data.expenses.push({ id:'e_car_oil', seq:900002, t:title, amt:amt, payer:'',
+      share:travelerIds(), dayId:'', badge:'车', src:'car', tag:'oil', mt:0 });
+  }
+  return t;
+}
+
 function calc(){
   var roomTotal = DAYS().reduce(function(s,d){ return s+num(d.price); },0);
   var carRent = num(data.car.days)*num(data.car.perday);
-  var oil     = num(data.car.km)*num(data.car.oil);
+  var oil     = fuelTotals().cost;             // 油费来自实际加油记账,不再是估算
   var carTotal= carRent+oil;
   // 其他开销 = 记在账上的支出里,除掉房费和车费的部分。
   // 不排掉的话就和上面的「房费单人价合计」「车费合计」重复算了一遍。

@@ -25,6 +25,11 @@ var DEFAULT = {
   mt: { people4: 0, people6: 0, car: 0, start: 0 },
   car: { days: 8, perday: 930, km: 2420, oil: 0.8 },
 
+  /* 实际加油记账:date=日期,odo=加油时里程表读数,cost=本次油费。
+     油费总价 = Σcost,会汇总成一条「油费合计」进分账;
+     平均每公里 = 总价 ÷ (最后读数−首次读数),只用于分析,不进分账。 */
+  fuel: [],
+
   members: [
     { id: "m1", seq: 1, name: "巴巴",  noTrip: false, mt: 0 },
     { id: "m2", seq: 2, name: "柠檬",  noTrip: true,  mt: 0 },
