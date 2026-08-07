@@ -139,6 +139,22 @@ table.bal td:first-child{text-align:left;font-weight:700;}
 .dayex.unclaimed,.exrow.unclaimed{border-left:3px solid #d98324;}
 .warnline{font-size:11px;font-weight:700;color:#c9702a;background:#fff6ec;border-radius:7px;padding:5px 8px;margin:2px 0 6px;line-height:1.4;}
 .dayexnote{font-size:10.5px;color:#aab;line-height:1.45;padding-top:2px;}
+
+/* 每日页:概览模式切换 + 只读紧凑排版 */
+.modebar{display:flex;align-items:center;gap:8px;margin:0 0 10px;}
+.modetip{flex:1;min-width:0;font-size:11.5px;color:#8a8f99;font-weight:700;}
+.modebtn{flex:0 0 auto;font-family:inherit;font-size:12.5px;font-weight:700;border:none;border-radius:9px;padding:8px 14px;background:#2a9d63;color:#fff;cursor:pointer;-webkit-appearance:none;appearance:none;}
+.card.oview{padding:10px 12px;}
+.ovline{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;line-height:1.5;color:#333;padding:1.5px 0;}
+.ovline .dim{color:#8a8f99;font-size:11.5px;}
+.ovline span{min-width:0;overflow-wrap:anywhere;}
+.ovnone{font-size:11.5px;color:#aab;padding:4px 0 2px;}
+.ovrow{display:flex;align-items:baseline;gap:8px;padding:4.5px 8px;background:#fafbfc;border-radius:8px;margin-bottom:5px;border-left:3px solid #e0e3e8;}
+.ovrow.unclaimed{border-left-color:#d98324;}
+.ovname{flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere;}
+.ovamt{font-size:13px;font-weight:800;white-space:nowrap;}
+.ovpayer{font-size:11px;color:#8a8f99;white-space:nowrap;}
+.ovwarn{font-size:10.5px;color:#c9702a;font-weight:700;white-space:nowrap;}
 .sechd{font-size:12.5px;font-weight:800;color:#6b7480;padding:6px 4px 7px;}
 .note{font-size:11.5px;color:#aab;text-align:center;padding:4px 12px;}
 

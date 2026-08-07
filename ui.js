@@ -12,6 +12,15 @@ function toggleMembers(){
   renderSplit();
 }
 
+/* 每日页:概览 / 编辑两种模式。默认概览 —— 只读、紧凑,路上扫一眼用的 */
+var LS_DAYS='xj_ui_daysmode';
+var DAYS_MODE=(lsGet(LS_DAYS)==='edit') ? 'edit' : 'overview';
+function toggleDaysMode(){
+  DAYS_MODE = DAYS_MODE==='overview' ? 'edit' : 'overview';
+  lsSet(LS_DAYS, DAYS_MODE==='edit' ? 'edit' : 'ov');
+  renderDays();
+}
+
 /* 一条支出的编辑行(每日页用):项目名 / 金额 / 付款人 / 分摊
    付款人可以先不选 —— 帮别人代记时很常见。没选之前这笔不进分账,界面上会明说。 */
 function expenseRowHTML(e){
@@ -40,13 +49,53 @@ function expenseRowHTML(e){
   '</div>';
 }
 
+/* 概览模式的开销行:只读、紧凑。没选付款人标橙,和编辑模式同一套口径 */
+function overviewExpenseRow(e){
+  var claimed=isLiveMember(e.payer);
+  return '<div class="ovrow'+(claimed?'':' unclaimed')+'">'+
+    '<span class="ovname">'+esc(e.t||'(未命名)')+'</span>'+
+    '<span class="ovamt">¥'+money(num(e.amt))+'</span>'+
+    (claimed ? '<span class="ovpayer">'+esc(mName(e.payer))+'</span>' : '<span class="ovwarn">⚠️ 未选付款人</span>')+
+  '</div>';
+}
+function overviewDayHTML(d){
+  var sun=daySun(d);
+  var h='<div class="cardtop">'+
+    '<span class="dbadge '+(d.rest?'rest':'')+'">'+esc(d.b)+'</span>'+
+    '<span class="droute">'+esc(d.route)+'</span>'+
+    '<span class="pill '+(d.booked?'ok':'no')+'">'+(d.booked?'已订':'未订')+'</span>'+
+  '</div>'+
+  '<div class="dayinfo"><b>'+esc(dayDate(d.id))+'</b> '+esc(dayWeek(d.id))+
+    (sun ? ' · 🌅 '+sun.rise+' · 🌇 '+sun.set+' <span class="dayinfo-x">'+esc(sun.place)+'·推算</span>' : '')+
+  '</div>';
+  var rows=[];
+  if(d.area || num(d.km)) rows.push('<span>📍 '+(d.area?esc(d.area):'')+(num(d.km)?(' · '+num(d.km)+' km'):'')+'</span>');
+  if(d.hotel) rows.push('<span>🏨 '+esc(d.hotel)+(d.room?(' · '+esc(d.room)):'')+(num(d.price)?(' · ¥'+money(num(d.price))+'/人'):'')+'</span>');
+  if(d.plan) rows.push('<span>📅 '+esc(d.plan)+'</span>');
+  if(d.cancel || d.payer) rows.push('<span class="dim">⏰ '+(d.cancel?esc(d.cancel):'')+(d.payer?(' · '+esc(d.payer)):'')+'</span>');
+  if(rows.length) h+='<div class="ovline">'+rows.join('</div><div class="ovline">')+'</div>';
+  h+='<div class="dayexhd"><span>🧾 当天开销</span>'+
+     '<span class="daytot" id="daytot_'+d.id+'">当天合计 ¥'+money(dayTotal(d.id))+'</span></div>';
+  var ex=dayExpenses(d.id);
+  h+= ex.length ? ex.map(overviewExpenseRow).join('') : '<div class="ovnone">今天还没有开销记录</div>';
+  return h;
+}
+
 function renderDays(){
   var box=el('v_days'); box.innerHTML='';
+  var mb=document.createElement('div'); mb.className='modebar';
+  mb.innerHTML = DAYS_MODE==='overview'
+    ? '<span class="modetip">👀 概览模式 · 只读</span><button class="modebtn" onclick="toggleDaysMode()">✏️ 编辑</button>'
+    : '<span class="modetip">✏️ 编辑模式</span><button class="modebtn" onclick="toggleDaysMode()">👀 概览</button>';
+  box.appendChild(mb);
   DAYS().forEach(function(d){
     var q="'"+d.id+"'";
     var sun=daySun(d);
-    var c=document.createElement('div'); c.className='card';
-    c.innerHTML=
+    var c=document.createElement('div'); c.className='card'+(DAYS_MODE==='overview'?' oview':'');
+    if(DAYS_MODE==='overview'){
+      c.innerHTML=overviewDayHTML(d);
+    }else{
+      c.innerHTML=
       '<div class="cardtop">'+
         '<span class="dbadge '+(d.rest?'rest':'')+'">'+esc(d.b)+'</span>'+
         '<span class="droute">'+esc(d.route)+'</span>'+
@@ -79,6 +128,7 @@ function renderDays(){
       dayExpenses(d.id).map(expenseRowHTML).join('')+
       '<button class="addbtn" style="margin:0;" onclick="addDayExpense('+q+')">＋ 记一笔当天开销</button>'+
       '<div class="dayexnote">房费不在这里改(用「预订」页的刷新房费)。合计含房费,记完自动进分账。</div>';
+    }
     box.appendChild(c);
   });
 }
