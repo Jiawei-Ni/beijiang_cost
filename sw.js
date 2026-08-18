@@ -2,7 +2,7 @@
    策略:app shell 全部预缓存 → 打开一次后彻底离线可用(禾木/喀纳斯没信号也能开)
    更新:改代码后把 CACHE 版本号 +1,用户下次联网打开会静默下载新版,再开一次生效
 */
-var CACHE = 'beijiang-v15';
+var CACHE = 'beijiang-v16';
 var ASSETS = [
   './',
   './index.html',

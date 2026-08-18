@@ -107,6 +107,8 @@ table.bal td:first-child{text-align:left;font-weight:700;}
 .mrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;min-width:0;}
 .mrow input{flex:1 1 100px;min-width:0;width:0;}
 .bindrow{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap;}
+.selfrow{display:flex;gap:6px;margin:2px 0 5px;}
+.selfrow .chip{font-size:11px;}
 .bindrow label{font-size:11px;color:#8a8f99;font-weight:700;white-space:nowrap;margin:0;}
 .bindrow select{flex:1;min-width:130px;font-size:13px;padding:6px 8px;background:#fff;}
 .bindhint{font-size:10.5px;color:#8a8f99;white-space:normal;}

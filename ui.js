@@ -154,29 +154,23 @@ function setCostValue(id,v){
 function refreshCostView(){
   var box=el('v_cost'); if(!box || !box._costMounted) return;
   var r=calc(), ft=fuelTotals();
-  setCostValue('cost_people4',data.people4); setCostValue('cost_people6',data.people6);
   setCostValue('cost_car_days',data.car.days); setCostValue('cost_car_perday',data.car.perday);
   setCostValue('cost_car_startodo', data.car.startOdo);
 
-  setCostText('cost_p4_head','💰 全程人均('+data.people4+'人)');
-  setCostText('cost_p4_total','¥'+money(r.per4));
-  setCostText('cost_p4_room','¥'+money(r.roomTotal));
-  setCostText('cost_p4_car_label','车费 ÷ '+data.people4+'人'); setCostText('cost_p4_car','¥'+money(r.carPer4));
-  setCostText('cost_p4_other_label','其他开销 ÷ '+data.people4+'人'); setCostText('cost_p4_other','¥'+money(r.other/p4n()));
-  setCostText('cost_p6_head','💰 全程人均('+data.people6+'人)');
-  setCostText('cost_p6_total','¥'+money(r.per6));
-  setCostText('cost_p6_room','¥'+money(r.roomTotal));
-  setCostText('cost_p6_car_label','车费 ÷ '+data.people6+'人'); setCostText('cost_p6_car','¥'+money(r.carPer6));
-  setCostText('cost_p6_other_label','其他开销 ÷ '+data.people6+'人'); setCostText('cost_p6_other','¥'+money(r.other/p6n()));
-  setCostText('cost_rent_label','租车 '+data.car.days+'×'+data.car.perday); setCostText('cost_rent','¥'+money(r.carRent));
+  setCostText('cost_total','¥'+money(r.per));
+  setCostText('cost_room','¥'+money(r.roomTotal));
+  setCostText('cost_car_label','车费 ÷ '+r.participants+'人'); setCostText('cost_car','¥'+money(r.carPer));
+  setCostText('cost_other_label','其他开销 ÷ '+r.participants+'人'); setCostText('cost_other','¥'+money(r.otherPer));
+  var selfN = r.participants - r.roomCount;
+  setCostText('cost_note', selfN>0
+    ? r.roomCount+' 人参与房费 · '+selfN+' 人房费自理(不摊房费),车费和其余开销全员 '+r.participants+' 人摊'
+    : r.participants+' 人参与,房费/车费/其余开销全员摊');
   renderFuelRows();
   setCostText('cost_fuel_sum','共 '+ft.count+' 笔 · 总里程 '+(ft.km?ft.km+' km':'—'));
   setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
   setCostText('cost_car_total','¥'+money(r.carTotal)); setCostText('cost_other_total','¥'+money(r.otherAll));
 }
-function p4n(){ return num(data.people4||4)||4; }
-function p6n(){ return num(data.people6||6)||6; }
 function setPeople(k,v){ data[k]=v; data.mt[k]=now(); markDirty(); refreshCostView(); }
 function setCar(k,v){ data.car[k]=v; data.mt.car=now(); markDirty(); refreshCostView(); }
 
@@ -208,10 +202,10 @@ function refreshFuelTotals(){
   setCostText('cost_oil','¥'+money(r.oil));
   setCostText('cost_perkm', ft.perKm!=null ? money(r2(ft.perKm)) : '—');
   setCostText('cost_car_total','¥'+money(r.carTotal));
-  // 人均总花费和两条车费行也要跟着变 —— 不然记一笔加油,人均那行大字纹丝不动
-  setCostText('cost_p4_total','¥'+money(r.per4)); setCostText('cost_p6_total','¥'+money(r.per6));
-  setCostText('cost_p4_car','¥'+money(r.carPer4)); setCostText('cost_p6_car','¥'+money(r.carPer6));
-  setCostText('cost_p4_other','¥'+money(r.other/p4n())); setCostText('cost_p6_other','¥'+money(r.other/p6n()));
+  // 人均总花费和车费/其他行也要跟着变 —— 不然记一笔加油,人均那行大字纹丝不动
+  setCostText('cost_total','¥'+money(r.per));
+  setCostText('cost_car','¥'+money(r.carPer));
+  setCostText('cost_other','¥'+money(r.otherPer));
   setCostText('cost_other_total','¥'+money(r.otherAll));
 }
 function addFuel(){
@@ -240,23 +234,14 @@ function renderCost(){
   var box=el('v_cost');
   if(!box._costMounted){
     box.innerHTML=
-      '<div class="peoplebar"><label>👥 分摊人数(方案A)</label><input id="cost_people4" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setPeople(\'people4\',this.value)"></div>'+
       '<div class="sum">'+
-        '<h3 id="cost_p4_head"></h3>'+
-        '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val" id="cost_p4_total"></span></div>'+
+        '<h3>💰 全程人均(方案已定,人数由成员自动算)</h3>'+
+        '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val" id="cost_total"></span></div>'+
         '<div class="divider"></div>'+
-        '<div class="miniline"><span>房费(每日单人价合计)</span><span id="cost_p4_room"></span></div>'+
-        '<div class="miniline"><span id="cost_p4_car_label"></span><span id="cost_p4_car"></span></div>'+
-        '<div class="miniline"><span id="cost_p4_other_label"></span><span id="cost_p4_other"></span></div>'+
-      '</div>'+
-      '<div class="peoplebar"><label>👥 分摊人数(方案B)</label><input id="cost_people6" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" oninput="setPeople(\'people6\',this.value)"></div>'+
-      '<div class="sum" style="background:linear-gradient(135deg,#2a5c9d,#3577c9);">'+
-        '<h3 id="cost_p6_head"></h3>'+
-        '<div class="bigrow"><span class="lbl">人均总花费</span><span class="val" id="cost_p6_total"></span></div>'+
-        '<div class="divider"></div>'+
-        '<div class="miniline"><span>房费(每日单人价合计)</span><span id="cost_p6_room"></span></div>'+
-        '<div class="miniline"><span id="cost_p6_car_label"></span><span id="cost_p6_car"></span></div>'+
-        '<div class="miniline"><span id="cost_p6_other_label"></span><span id="cost_p6_other"></span></div>'+
+        '<div class="miniline"><span>房费(每日单人价合计)</span><span id="cost_room"></span></div>'+
+        '<div class="miniline"><span id="cost_car_label"></span><span id="cost_car"></span></div>'+
+        '<div class="miniline"><span id="cost_other_label"></span><span id="cost_other"></span></div>'+
+        '<div class="miniline" style="margin-top:5px;font-size:11.5px;opacity:.9;"><span id="cost_note"></span></div>'+
       '</div>'+
       '<div class="card">'+
         '<div class="cardtop"><span class="droute">🚗 租车</span></div>'+
@@ -281,7 +266,7 @@ function renderCost(){
         '<div class="miniline" style="color:#333;font-weight:800;"><span>房费车费以外的支出</span><span id="cost_other_total"></span></div>'+
         '<div style="font-size:11px;color:#aab;padding-top:6px;">「每日」页记的当天开销、分账页手加的支出都算在这里(不含房费车费,否则重复算)。</div>'+
       '</div>'+
-      '<div class="note">口径:人均 = 每日单人价合计(房) + 车费÷人数 + 其他开销÷人数。油费已含在车费里。<br>⚠️ 这里的「单人价」就是每人每晚的价,<b>不要再乘人数</b>;分账页的房费总额会自动 = 单人价 × 实际参与人数。<br>这页是<b>预算口径</b>:未预订的房间也按单人价算进去了;分账页则只认已经花掉的钱。</div>';
+      '<div class="note">口径:人均 = 每日单人价合计(房) + 已认领车费÷参与人数 + 已认领其他开销÷参与人数。<b>房费自理</b>的人不摊房费,车费和其他开销全员摊(在「分账」成员里标)。油费已含在车费里。<br>⚠️ 「单人价」是每人每晚的价,<b>不要再乘人数</b>。这页是<b>预算口径</b>:未预订的房间也按单人价算;分账页只认已经花掉的钱。</div>';
     box._costMounted=true;
   }
   refreshCostView();
@@ -363,9 +348,9 @@ function refreshDayTotals(){
 
 /* ===== 分账:一键刷新 ===== */
 function importRooms(){
-  var T=travelers();
-  if(!T.length){ alert('没有参与旅行的成员'); return; }
-  if(!confirm('按每日「单人价 × '+T.length+' 人」刷新房费金额?\n\n· 已有条目的付款人、分摊名单一律保留\n· 你手改过金额的条目不会被覆盖\n· 未预订的天数金额记 0')) return;
+  var R=roomPeople();               // 房费只由「参与且不自理」的人摊
+  if(!R.length){ alert('没有参与旅行的成员'); return; }
+  if(!confirm('按每日「单人价 × '+R.length+' 人」刷新房费金额?\n\n· 房费自理的人不摊房费(自动排除)\n· 已有条目的付款人、分摊名单一律保留\n· 你手改过金额的条目不会被覆盖\n· 未预订的天数金额记 0')) return;
 
   var kept=0, added=0, skipped=0;
   var live=DAYS(), alive={};
@@ -387,8 +372,8 @@ function importRooms(){
       data.expenses.push(stamp({
         id:'e_room_'+d.id, seq:(+d.seq||0)+0.5,   // 挂在对应那天后面
         t: d.hotel || (d.area+'住宿'),
-        amt: d.booked ? r2(p*T.length) : 0,
-        payer: '', share: travelerIds(),     // 付款人留空等人认领,不硬塞第一个成员
+        amt: d.booked ? r2(p*R.length) : 0,
+        payer: '', share: roomIds(),     // 付款人留空等人认领;房费只摊给非自理者
         dayId: d.id, src:'room', unit:p
       }));
       added++;
@@ -398,9 +383,9 @@ function importRooms(){
       if(!e.t) e.t=d.hotel||(d.area+'住宿');
       if(e.manual){ skipped++; }
       else{
-        var T2=travelerIds();
-        var sh=(Array.isArray(e.share)&&e.share.length)?e.share.filter(function(x){ return T2.indexOf(x)>=0; }):T2;
-        e.amt = d.booked ? r2(p*(sh.length||T2.length)) : 0;
+        var R2=roomIds();
+        var sh=(Array.isArray(e.share)&&e.share.length)?e.share.filter(function(x){ return R2.indexOf(x)>=0; }):R2;
+        e.amt = d.booked ? r2(p*(sh.length||R2.length)) : 0;
         kept++;
       }
       stamp(e);
@@ -489,13 +474,16 @@ function renderSplit(){
         '<div class="mrow"><input value="'+esc(m.name)+'" onchange="setMember('+q+',this.value)">'+
           '<span class="chip '+(m.noTrip?'':'on')+'" style="white-space:nowrap;" onclick="togglePayerOnly('+q+')">'+(m.noTrip?'💳只代付':'🧳参与')+'</span>'+
           '<span class="del" onclick="delMember('+q+')">✕</span></div>'+
+        // 房费自理:只影响房费分摊,车费和其他开销照常全员摊。只代付的本来就不摊,不用标
+        (m.noTrip ? '' :
+          '<div class="selfrow"><span class="chip '+(m.selfPay?'on':'')+'" onclick="toggleSelfPay('+q+')">'+(m.selfPay?'🏠 房费自理':'🏠 摊房费')+'</span></div>')+
         '<div class="bindrow"><label>统一结算给</label><select onchange="setSettlementRep('+q+',this.value)">'+
           '<option value="">本人结算</option>'+
           Ms.filter(function(x){return x.id!==m.id;}).map(function(x){ return '<option value="'+esc(x.id)+'" '+(direct===x.id?'selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+
         '</select>'+hint+'</div></div>';
     }).join('')+
     '<button class="addbtn" style="margin:4px 0 0;" onclick="addMember()">＋ 加成员</button>'+
-    '<div style="font-size:11px;color:#aab;padding-top:6px;">点「参与/只代付」切换。<b>只代付</b>的人不占人头、不分摊任何费用,只记录他垫付了多少、最后该收回多少。<br><b>统一结算</b>只把最终转账并到代表名下,不改变每人账目和真实付款人。改名字不会影响账目。</div>'
+    '<div style="font-size:11px;color:#aab;padding-top:6px;">点「参与/只代付」切换。<b>只代付</b>的人不占人头、不分摊任何费用,只记录他垫付了多少、最后该收回多少。<br><b>🏠 房费自理</b>:自己出房费不进共同账本,但车费和其他开销照常全员摊。<br><b>统一结算</b>只把最终转账并到代表名下,不改变每人账目和真实付款人。改名字不会影响账目。</div>'
     : '<div class="foldpeek">'+Ms.map(function(m){ return esc(m.name); }).join('、')+'</div>')+
   '</div>'+
   '<div class="sechd">🧾 支出明细(按日期排,谁付的 / 谁分摊)</div>'+

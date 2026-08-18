@@ -125,6 +125,20 @@ var data = migrate(loadRaw()) || JSON.parse(JSON.stringify(DEFAULT));
   if(!data.car) data.car = JSON.parse(JSON.stringify(DEFAULT.car));
   if(data.car.startOdo==null) data.car.startOdo='';
   migrateFuelToExpenses(data);           // 兜底:本地还存着旧 fuel[] 的也转掉
+  // 房费自理(selfPay):老数据里房费条目 share 可能还带着自理成员,启动时清一遍
+  (function cleanSelfPay(){
+    var self={};
+    data.members.forEach(function(m){ if(m&&!m.del&&m.selfPay) self[m.id]=1; });
+    if(!Object.keys(self).length) return;
+    data.expenses.forEach(function(e){
+      if(!e || e.del || e.src!=='room' || !Array.isArray(e.share)) return;
+      var ns=[], changed=false;
+      for(var i=0;i<e.share.length;i++){
+        if(self[e.share[i]]){ changed=true; } else { ns.push(e.share[i]); }
+      }
+      if(changed){ e.share=ns; stamp(e); }
+    });
+  })();
   if(!data.mt)  data.mt  = {people4:0,people6:0,car:0,start:0};
   if(data.mt.start==null) data.mt.start=0;
   if(!data.start) data.start = DEFAULT.start;
@@ -174,6 +188,10 @@ window.addEventListener('beforeunload',saveNow);
 /* ===== 成员 ===== */
 function travelers(){ return MEMBERS().filter(function(m){ return !m.noTrip; }); }
 function travelerIds(){ return travelers().map(function(m){ return m.id; }); }
+/* 房费自理的人(selfPay):自己出房费不进共同账本,但车费和其他开销照常全员摊。
+   房费分摊 = 参与成员中非自理者;车费/其他 = 全部参与成员 */
+function roomPeople(){ return travelers().filter(function(m){ return !m.selfPay; }); }
+function roomIds(){ return roomPeople().map(function(m){ return m.id; }); }
 function isPayerOnly(id){ var m=M(id); return !!(m&&m.noTrip); }
 /* 付款人是不是一个还在的成员 —— 空的(代记还没认领)和已删的都算不是 */
 function isLiveMember(id){ var m=M(id); return !!(m && !m.del); }
@@ -276,6 +294,20 @@ function togglePayerOnly(id){
       if(k>=0){ e.share.splice(k,1); stamp(e); }
     });
   }
+  markDirty(); renderSplit();
+}
+/* 房费自理开关:只影响房费分摊,车费和其他开销照常全员摊。
+   标自理 → 从所有房费条目 share 里摘掉;取消 → 加回 */
+function toggleSelfPay(id){
+  var m=M(id); if(!m || m.del || m.noTrip) return;
+  m.selfPay = !m.selfPay;
+  stamp(m);
+  data.expenses.forEach(function(e){
+    if(e.del || e.src!=='room' || !Array.isArray(e.share)) return;
+    var k=e.share.indexOf(id);
+    if(m.selfPay && k>=0){ e.share.splice(k,1); stamp(e); }
+    else if(!m.selfPay && k<0){ e.share.push(id); stamp(e); }
+  });
   markDirty(); renderSplit();
 }
 function setMember(id,v){
@@ -443,14 +475,16 @@ function calc(){
     if(!isLiveMember(e.payer)) return s;
     return s+num(e.amt);
   },0);
-  // 人数填 0 或空的时候兜底,否则会算出 ¥Infinity
-  var p4 = num(data.people4||4)||4, p6 = num(data.people6||6)||6;
+  // 分摊人数:车费/其他开销 = 全部参与成员;房费 = 参与且非自理
+  var participants = travelers().length;
+  var roomCount = roomPeople().length || participants;   // 兜底:没人标自理时就是全员
   return {
     roomTotal: roomTotal, carRent: carRent, oil: oilAll, carTotal: carTotal,
-    otherAll: otherAll, other: other, p4: p4, p6: p6,
-    carPer4: claimedCar/p4, carPer6: claimedCar/p6,   // 人均里只摊已认领的车费
-    per4: roomTotal + claimedCar/p4 + other/p4,
-    per6: roomTotal + claimedCar/p6 + other/p6
+    otherAll: otherAll, other: other,
+    participants: participants, roomCount: roomCount,
+    // 房费是单人价口径,人均直接加;车费/其他按认领口径 ÷ 参与人数
+    carPer: claimedCar/participants, otherPer: other/participants,
+    per: roomTotal + claimedCar/participants + other/participants
   };
 }
 function balances(){
