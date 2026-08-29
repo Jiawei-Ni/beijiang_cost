@@ -211,7 +211,7 @@ GitHub 右上角头像 → **Settings** → 左侧最底下 **Developer settings
 1. 改完文件重新传 GitHub
 2. **必须把 `sw.js` 第 5 行的版本号 +1**:
    ```js
-   var CACHE = 'beijiang-v16';   // → 改成 'beijiang-v17'
+   var CACHE = 'beijiang-v17';   // → 改成 'beijiang-v18'
    ```
    不改的话 Service Worker 会一直用旧缓存,同伴永远看不到新版。
 3. 同伴联网状态下打开一次会静默下载新版,**再开一次**生效(会弹「有新版本,关掉重开即可更新」)。

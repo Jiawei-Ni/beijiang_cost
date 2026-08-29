@@ -4,6 +4,11 @@
    2) D8/D9 用美团实付 566.34(原来是 141.59×4=566.36 反算,各多 2 分)
    3) 手工改过金额的房费条目打上 manual:true,「刷新房费」不会再覆盖它们
 
+   2026-08-05 已按云端账本同步:9 晚全部已订;D2/D3/D7 房价和酒店更新
+   (桔子 343.675 / 全季 202 / D7 沐桦民宿 156.75);车费改 7 天 × ¥980;
+   房费金额 = 单人价 × 4(参与房费人数,默认 5 人无自理)。
+   成员仍为出厂 5 人;云端新增的 kuso/熊(房费自理)与 pocket4pro 租金不进默认。
+
    ⚠️ v4 起所有条目带稳定 id,这里的 id 必须是【写死的常量】。
    原因:5 个人各自第一次打开 App 时拿到的都是这份 DEFAULT,
    如果 id 是随机生成的,一同步就会合并出 5 份重复的行程和账目。
@@ -23,7 +28,7 @@ var DEFAULT = {
   people4: 4,
   people6: 6,
   mt: { people4: 0, people6: 0, car: 0, start: 0 },
-  car: { days: 8, perday: 930, km: 2420, oil: 0.8, startOdo: '' },
+  car: { days: "7", perday: "980", km: 2420, oil: 0.8, startOdo: "" },
 
   members: [
     { id: "m1", seq: 1, name: "巴巴",  noTrip: false, mt: 0 },
@@ -35,33 +40,33 @@ var DEFAULT = {
 
   days: [
     { id:"d1", seq:1, b:"D1", rest:false, route:"厦门 → 乌鲁木齐", km:50,
-      plan:"赶路-取车-换雪地胎", area:"乌鲁木齐",
+      plan:"赶路-取车", area:"乌鲁木齐",
       hotel:"亚朵酒店(奥体中心红光山景区)", room:"双床房×2", price:180.25,
       booked:true, cancel:"9.26 12:00前", payer:"巴巴357/柠檬364", mt:0 },
     { id:"d2", seq:2, b:"D2", rest:false, route:"乌鲁木齐 → 赛里木湖", km:536.5,
       plan:"赶路-赛里木湖日落", area:"赛里木湖东门入口",
-      hotel:"桔子酒店(博乐赛里木湖店)", room:"双床房x2 721", price:360.5,
-      booked:false, cancel:"", payer:"", mt:0 },
+      hotel:"桔子酒店(博乐赛里木湖店)", room:"双床房x2", price:343.675,
+      booked:true, cancel:"9.26 23:00前", payer:"njw 1374.7", mt:0 },
     { id:"d3", seq:3, b:"D3", rest:false, route:"赛里木湖 → 克拉玛依", km:454.1,
       plan:"赛里木湖环湖-赶路转场", area:"克拉玛依",
-      hotel:"全季酒店(克拉玛依泰富广场一号井店)", room:"双床房x2 423", price:211.5,
-      booked:false, cancel:"", payer:"", mt:0 },
+      hotel:"全季酒店(克拉玛依泰富广场一号井店)", room:"双床房x2", price:202,
+      booked:true, cancel:"9.27 23:00前", payer:"njw 808", mt:0 },
     { id:"d4", seq:4, b:"D4", rest:false, route:"克拉玛依 → 布尔津", km:313.7,
       plan:"魔鬼城、五彩滩", area:"布尔津",
       hotel:"布尔津泰悦假日酒店", room:"双床房x2", price:182.475,
-      booked:true, cancel:"9.29 20:00", payer:"巴巴729.9", mt:0 },
+      booked:true, cancel:"9.29 20:00前", payer:"巴巴729.9", mt:0 },
     { id:"d5", seq:5, b:"D5", rest:false, route:"布尔津 → 贾登峪 → 喀纳斯", km:120,
       plan:"走走村里", area:"喀纳斯村里",
       hotel:"牧马星河云境别苑", room:"四人家庭房×1", price:616.5,
       booked:true, cancel:"9.29 12:00前", payer:"携程 njw 2466", mt:0 },
     { id:"d6", seq:6, b:"D6", rest:false, route:"喀纳斯 → 贾登峪 → 禾木", km:67.5,
       plan:"晨雾、三湾、转场禾木", area:"禾木村外游客中心",
-      hotel:"禾木全季", room:"全季双床x2 2834", price:708.5,
-      booked:false, cancel:"", payer:"", mt:0 },
+      hotel:"禾木全季", room:"全季双床x2", price:756.57,
+      booked:true, cancel:"9.30 23:00前", payer:"njw 3026.28", mt:0 },
     { id:"d7", seq:7, b:"D7", rest:false, route:"禾木 → 阿禾公路 → 阿勒泰", km:225,
       plan:"禾木村 + 阿禾公路", area:"阿勒泰",
-      hotel:"汉庭酒店(阿勒泰五百里风情街店)", room:"双床房 415", price:207.5,
-      booked:false, cancel:"", payer:"", mt:0 },
+      hotel:"沐桦民宿(五百里风情街店)", room:"沐桦森语家庭房", price:156.75,
+      booked:true, cancel:"10.2 23:59前", payer:"njw 去哪儿 627", mt:0 },
     { id:"d8", seq:8, b:"D8", rest:false, route:"阿勒泰 → 乌鲁木齐", km:500,
       plan:"乌伦古湖、S21沙漠公路", area:"乌鲁木齐",
       hotel:"全季酒店(乌鲁木齐天山国际机场新天润店)", room:"双床房×2", price:141.59,
@@ -73,27 +78,31 @@ var DEFAULT = {
   ],
 
   expenses: [
-    // --- D1 实际两间房分别付款,拆成两条 ---
+    // --- D1 实际两间房分别付款,拆成两条(默认 4 人摊房费,无自理者) ---
     { id:"e1", seq:1, t:"亚朵酒店 · 巴巴那间", amt:357, payer:"m1",
       share:["m1","m3","m4","m5"], dayId:"d1", src:"room", manual:true, mt:0 },
     { id:"e2", seq:2, t:"亚朵酒店 · 柠檬那间", amt:364, payer:"m2",
       share:["m1","m3","m4","m5"], dayId:"d1", src:"room", manual:true, mt:0 },
 
-    { id:"e3", seq:3, t:"桔子酒店(博乐赛里木湖店)", amt:0, payer:"m1",
-      share:["m1","m3","m4","m5"], dayId:"d2", src:"room", unit:360.5, mt:0 },
-    { id:"e4", seq:4, t:"全季酒店(克拉玛依泰富广场一号井店)", amt:0, payer:"m1",
-      share:["m1","m3","m4","m5"], dayId:"d3", src:"room", unit:211.5, mt:0 },
+    { id:"e3", seq:3, t:"桔子酒店(博乐赛里木湖店)", amt:1374.7, payer:"m3",
+      share:["m1","m3","m4","m5"], dayId:"d2", src:"room", unit:343.675, mt:0 },
+    { id:"e4", seq:4, t:"全季酒店(克拉玛依泰富广场一号井店)", amt:808, payer:"m3",
+      share:["m1","m3","m4","m5"], dayId:"d3", src:"room", unit:202, mt:0 },
     { id:"e5", seq:5, t:"布尔津泰悦假日酒店", amt:729.9, payer:"m1",
       share:["m1","m3","m4","m5"], dayId:"d4", src:"room", unit:182.475, mt:0 },
     { id:"e6", seq:6, t:"牧马星河云境别苑", amt:2466, payer:"m3",
       share:["m1","m3","m4","m5"], dayId:"d5", src:"room", unit:616.5, mt:0 },
-    { id:"e7", seq:7, t:"禾木全季", amt:0, payer:"m1",
-      share:["m1","m3","m4","m5"], dayId:"d6", src:"room", unit:708.5, mt:0 },
-    { id:"e8", seq:8, t:"汉庭酒店(阿勒泰五百里风情街店)", amt:0, payer:"m1",
-      share:["m1","m3","m4","m5"], dayId:"d7", src:"room", unit:207.5, mt:0 },
+    { id:"e7", seq:7, t:"禾木全季", amt:3026.28, payer:"m3",
+      share:["m1","m3","m4","m5"], dayId:"d6", src:"room", unit:756.57, mt:0 },
+    { id:"e8", seq:8, t:"沐桦民宿(五百里风情街店)", amt:627, payer:"m3",
+      share:["m1","m3","m4","m5"], dayId:"d7", src:"room", unit:156.75, mt:0 },
     { id:"e9", seq:9, t:"全季酒店(乌鲁木齐机场新天润店)", amt:566.34, payer:"m1",
       share:["m1","m3","m4","m5"], dayId:"d8", src:"room", unit:141.59, manual:true, mt:0 },
     { id:"e10", seq:10, t:"全季酒店(乌鲁木齐机场新天润店)", amt:566.34, payer:"m2",
-      share:["m1","m3","m4","m5"], dayId:"d9", src:"room", unit:141.59, manual:true, mt:0 }
+      share:["m1","m3","m4","m5"], dayId:"d9", src:"room", unit:141.59, manual:true, mt:0 },
+
+    // --- 租车(云端实际 7 天,付 m3,默认 4 人摊) ---
+    { id:"e_car_rent", seq:900001, t:"租车 7天", amt:6860, payer:"m3",
+      share:["m1","m3","m4","m5"], dayId:"", badge:"车", src:"car", tag:"rent", mt:0 }
   ]
 };
